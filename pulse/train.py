@@ -32,6 +32,7 @@ have run, and the weights of the best validation epoch kept.
 """
 from __future__ import annotations
 
+import contextlib
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -145,6 +146,48 @@ def batch_loss(model, part: Part, ids: np.ndarray, phase: str, device) -> torch.
     return pulse_loss(model, batch, S.ARMS[phase])
 
 
+# MPS attention dropout ------------------------------------------------------
+
+def _math_attention(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None,
+                    enable_gqa=False):
+    """Scaled dot-product attention with dropout from ordinary tensor operations."""
+    if enable_gqa:
+        key = key.repeat_interleave(query.shape[-3] // key.shape[-3], -3)
+        value = value.repeat_interleave(query.shape[-3] // value.shape[-3], -3)
+    weights = (query @ key.transpose(-2, -1)) * (scale if scale is not None else 1 / math.sqrt(query.shape[-1]))
+    if is_causal:
+        if attn_mask is not None:
+            raise ValueError("causal attention and an explicit mask cannot be combined")
+        keep = torch.ones(query.shape[-2], key.shape[-2], device=query.device, dtype=torch.bool).tril()
+        weights = weights.masked_fill(~keep, float("-inf"))
+    if attn_mask is not None:
+        weights = weights.masked_fill(~attn_mask, float("-inf")) if attn_mask.dtype == torch.bool else weights + attn_mask
+    return F.dropout(torch.softmax(weights, -1).nan_to_num(), p=dropout_p, training=True) @ value
+
+
+@contextlib.contextmanager
+def mps_attention_dropout():
+    """Route attention with dropout on MPS through `_math_attention`, as the reference did when training on MPS.
+
+    The MPS attention kernel rejects nonzero dropout on some paths. Every
+    other call, including all CPU and CUDA calls, keeps the original kernel.
+    """
+    original = F.scaled_dot_product_attention
+
+    def attention(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, *, scale=None,
+                  enable_gqa=False):
+        if query.device.type == "mps" and dropout_p > 0:
+            return _math_attention(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
+        return original(query, key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal,
+                        scale=scale, enable_gqa=enable_gqa)
+
+    F.scaled_dot_product_attention = attention
+    try:
+        yield
+    finally:
+        F.scaled_dot_product_attention = original
+
+
 # Loop -----------------------------------------------------------------------
 
 def build(phase: str, prepared: Prepared, policy: M.Policy | None):
@@ -221,6 +264,12 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     protocol = Path(out) / "protocol.json"
     if protocol.exists() and Protocol.load(protocol) != prepared.protocol:
         raise ValueError(f"{protocol} holds another protocol")
+    with mps_attention_dropout() if torch.device(device).type == "mps" else contextlib.nullcontext():
+        return _fit(phase, prepared, policy, Path(out), device, settings)
+
+
+def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str,
+         settings: Settings) -> dict:
     if policy is not None:
         policy.to(device)
     model = build(phase, prepared, policy).to(device)

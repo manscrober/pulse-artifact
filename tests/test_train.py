@@ -83,6 +83,41 @@ def test_absorbing_outcome_counts_until_onset():
     assert T._binary_loss(logits, target, absorbing).item() == pytest.approx(np.log(2.0))
 
 
+def _attention_inputs(device="cpu"):
+    g = torch.Generator().manual_seed(3)
+    return [torch.randn(2, 4, 6, 16, generator=g).to(device) for _ in range(3)]
+
+
+def test_mps_attention_dropout_is_scoped_and_leaves_cpu_calls_unchanged():
+    import torch.nn.functional as F
+    original = F.scaled_dot_product_attention
+    q, k, v = _attention_inputs()
+    expected = original(q, k, v, is_causal=True)
+    with T.mps_attention_dropout():
+        assert F.scaled_dot_product_attention is not original
+        assert torch.equal(F.scaled_dot_product_attention(q, k, v, is_causal=True), expected)
+    assert F.scaled_dot_product_attention is original
+
+
+def test_math_attention_agrees_with_the_kernel():
+    import torch.nn.functional as F
+    q, k, v = _attention_inputs()
+    mask = torch.rand(6, 6, generator=torch.Generator().manual_seed(1)) > 0.3
+    mask.fill_diagonal_(True)
+    for kwargs in ({"is_causal": True}, {"attn_mask": mask}):
+        assert torch.allclose(T._math_attention(q, k, v, **kwargs), F.scaled_dot_product_attention(q, k, v, **kwargs),
+                              atol=1e-6)
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs an MPS device")
+def test_mps_attention_with_dropout_runs():
+    import torch.nn.functional as F
+    q, k, v = _attention_inputs("mps")
+    with T.mps_attention_dropout():
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=0.5, is_causal=True)
+    assert out.shape == q.shape and torch.isfinite(out).all()
+
+
 def test_fit_refuses_another_protocol(tmp_path):
     import dataclasses
     dataclasses.replace(protocol(), cache_sha256="1" * 64).save(tmp_path / "protocol.json")
