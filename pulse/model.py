@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
@@ -385,3 +386,55 @@ class Policy(GroupedModel):
 def build_policy(protocol: Protocol) -> Policy:
     torch.manual_seed(SEED)
     return Policy(protocol)
+
+
+# Checkpoints -------------------------------------------------------------
+#
+# The artifact saves {"state": state_dict, "history": per-epoch validation
+# losses, "cache_sha256": content digest of the training cache} and reads it
+# without unpickling. Checkpoints of the reference implementation hold the
+# state under "model" with longer names and pickle their configuration; only
+# `read_reference_state` reads them, mapping the names as follows:
+#
+#   policy  model.model.<rest>                       -> <rest>
+#   PULSE   pulse.model.<rest>                       -> pulse.<rest>
+#           pulse.model.encoders.<i>.residual_gate_heads.*   dropped (never used)
+#           adapters.*, probability_adapters.*       unchanged
+
+
+def research_policy_state(state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    if not all(k.startswith("model.model.") for k in state):
+        raise ValueError("not a reference policy state")
+    return {k.removeprefix("model.model."): v for k, v in state.items()}
+
+
+def research_pulse_state(state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    if not any(k.startswith("pulse.model.") for k in state):
+        raise ValueError("not a reference PULSE state")
+    return {("pulse." + k.removeprefix("pulse.model.") if k.startswith("pulse.model.") else k): v
+            for k, v in state.items() if ".residual_gate_heads." not in k}
+
+
+def save_checkpoint(path, model: nn.Module, history: list[dict], cache_sha256: str) -> None:
+    """Weights, validation history and the cache digest of the protocol the model was trained with."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pending = path.with_suffix(".pending")
+    torch.save({"state": {k: v.detach().cpu().clone() for k, v in model.state_dict().items()},
+                "history": history, "cache_sha256": cache_sha256}, pending)
+    pending.replace(path)
+
+
+def read_state(path) -> dict[str, torch.Tensor]:
+    """State dict of an artifact checkpoint, loaded without unpickling."""
+    return torch.load(path, map_location="cpu", weights_only=True)["state"]
+
+
+def read_reference_state(path) -> dict[str, torch.Tensor]:
+    """State dict of a reference checkpoint, in artifact names, for the reference comparisons only.
+
+    Reference checkpoints pickle their configuration and audit, so reading
+    one unpickles arbitrary objects: use it only on files of known origin.
+    """
+    state = torch.load(path, map_location="cpu", weights_only=False)["model"]
+    return research_policy_state(state) if next(iter(state)).startswith("model.model.") else research_pulse_state(state)
