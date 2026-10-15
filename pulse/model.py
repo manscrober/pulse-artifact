@@ -327,7 +327,11 @@ class GroupedModel(nn.Module):
         `bin_probs` is the sigmoid of the logit.
         """
         x = self.inputs(history)
-        logits = self.binary_logits(x, extra)
+        return self.next_outputs(x, self.binary_logits(x, extra), next_binary, lengths, extra)
+
+    def next_outputs(self, x: dict, logits: torch.Tensor, next_binary: torch.Tensor | None,
+                     lengths: torch.Tensor | None, extra: Extra | None = None) -> dict:
+        """Second half of `predict_next`, for callers that choose the next-hour binaries from the logits."""
         if next_binary is None:
             next_binary = torch.sigmoid(logits)
         elif next_binary.shape[-1] == len(self.binary_names):
