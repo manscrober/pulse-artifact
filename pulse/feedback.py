@@ -200,3 +200,57 @@ def build_pulse(protocol: Protocol, train_binary: torch.Tensor) -> FeedbackPULSE
     core = pulse_model(protocol)
     core.set_binary_biases(core.binary_initial_logits(train_binary))
     return FeedbackPULSE(core)
+
+
+class RolloutFeedback:
+    """Descriptor history of one rollout call, written as rows join the event history.
+
+    Rows before the forecast origin get the descriptors that teacher forcing
+    would give them: row j holds the laws predicted from rows before j with
+    the recorded next-hour binaries. Each generated row holds the laws from
+    which it was drawn: CNF quantiles for every continuous variable, recorded
+    or not, the binary probabilities and the policy's vasopressor
+    probability.
+    """
+
+    def __init__(self, pulse: FeedbackPULSE, rows: int, steps: int, *, quantiles: bool, probabilities: bool):
+        device = pulse.pulse.cont_means.device
+        self.pulse, self.quantiles, self.probabilities = pulse, quantiles, probabilities
+        nv, nk = len(V.CONTINUOUS), len(V.BINARY)
+        self.descriptors = (torch.zeros(rows, steps, nv, len(PROBABILITIES), device=device),
+                            torch.zeros(rows, steps, nv, device=device),
+                            torch.zeros(rows, steps, nk, device=device), torch.zeros(rows, steps, nk, device=device))
+
+    def extra(self) -> Extra | None:
+        return self.pulse.extra(self.descriptors, self.quantiles, self.probabilities)
+
+    @torch.no_grad()
+    def prefix(self, history: dict[str, torch.Tensor], policy: Policy, length: int) -> None:
+        """Teacher-forced descriptors for rows 1 to `length - 1` of the recorded prefix."""
+        core = self.pulse.pulse
+        outcomes = history["binary"][:, :, core.binary_output_indices]
+        hours = history.get("time_hours")
+        po = policy.treatments(history["continuous"][:, :length], history["binary"][:, :length], history["static"],
+                               None if hours is None else hours[:, :length])
+        q, present, p, p_present = self.descriptors
+        timed = ("continuous", "binary", "time_hours", "continuous_mask", "padding_mask")
+        for j in range(1, length):
+            part = {k: (v[:, :j] if k in timed and v is not None else v) for k, v in history.items()}
+            out = core.predict_next(part, outcomes[:, 1:j + 1])
+            dq, dm, dp, dpm = self.pulse.distribution_tensors(out, (len(outcomes), 1, len(V.CONTINUOUS)))
+            # The policy's probability at row j - 1, from its softmax over the prefix.
+            dp[:, 0, V.VASOPRESSOR] = po["binary_treatment_probs"][:, j - 1, 0]
+            dpm[:, 0, V.VASOPRESSOR] = 1.0
+            q[:, j], present[:, j], p[:, j], p_present[:, j] = dq[:, 0], dm[:, 0], dp[:, 0], dpm[:, 0]
+
+    def record(self, outputs: dict, vasopressor: torch.Tensor, rows: torch.Tensor, cols: torch.Tensor) -> None:
+        """Store the laws of the step at history column `cols` of the appended `rows`.
+
+        `vasopressor` [R, 1] is the sigmoid of the policy logit used for the
+        draw.
+        """
+        q, present, p, p_present = self.pulse.distribution_tensors(outputs, (len(vasopressor), 1, len(V.CONTINUOUS)))
+        p[:, 0, V.VASOPRESSOR] = vasopressor[:, 0]
+        p_present[:, 0, V.VASOPRESSOR] = 1.0
+        for stored, value in zip(self.descriptors, (q, present, p, p_present)):
+            stored[rows, cols] = value[rows, 0]

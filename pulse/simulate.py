@@ -31,7 +31,8 @@ import torch
 from pulse import cnf
 from pulse import variables as V
 from pulse.data import Part, case_path, save_case
-from pulse.model import GroupedModel, Policy
+from pulse.feedback import FeedbackPULSE, RolloutFeedback
+from pulse.model import Policy
 
 STEP_HOURS = 1.0  # length of one generated step
 SEED = 500_000
@@ -48,22 +49,35 @@ class Arm:
     `two_pass` draws the next-hour binary outcomes first and conditions the
     continuous laws on that draw, with the history keeping the outcomes
     already realised; otherwise the continuous encoders see outcomes drawn
-    afresh for every history row.
+    afresh for every history row. `feedback` keeps the descriptor history
+    of `pulse.feedback`; `quantiles` and `probabilities` choose which
+    descriptors the model reads. `sobol` draws binary branches from a
+    shared Sobol table.
     """
 
     weights: str
     two_pass: bool = False
+    feedback: bool = False
+    quantiles: bool = False
+    probabilities: bool = False
     sobol: bool = False
 
     def __post_init__(self):
-        if self.sobol and not self.two_pass:
-            raise ValueError("Sobol branch draws need the two-pass step")
+        if (self.sobol or self.feedback) and not self.two_pass:
+            raise ValueError("Sobol draws and feedback need the two-pass step")
+        if (self.quantiles or self.probabilities) and not self.feedback:
+            raise ValueError("descriptors need feedback")
 
 
 ARMS = {
     "sample": Arm("sample"),
     "sample_twopass": Arm("sample", two_pass=True),
     "sample_sobol": Arm("sample", two_pass=True, sobol=True),
+    # Descriptors of both kinds with the simulator's own sampled values in the history.
+    "sampled_state": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
+                         sobol=True),
+    "quantile_only": Arm("quantile_only", two_pass=True, feedback=True, quantiles=True),
+    "probability_only": Arm("probability_only", two_pass=True, feedback=True, probabilities=True),
 }
 
 SOBOL_SEED = 362
@@ -120,14 +134,16 @@ def _absorb(previous: torch.Tensor, nxt: torch.Tensor, probs: torch.Tensor, outc
 
 
 @torch.no_grad()
-def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: int,
+def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: int,
             paths: int) -> tuple[torch.Tensor, torch.Tensor]:
     """Generate hours `start + 1` onwards; returns continuous [N, P, T, V] and binary [N, P, T, K]."""
-    pulse.eval(), policy.eval()
+    core = pulse.pulse
+    pulse.eval()
+    policy.eval()
     n, steps, nv = batch["continuous"].shape
     rows_total = n * paths
     low, high = (b.to(batch["continuous"].device) for b in V.bounds())
-    primary, outcome = pulse.output_indices, pulse.binary_output_indices
+    primary, outcome = core.output_indices, core.binary_output_indices
     bolus, vaso = V.BOLUS, V.VASOPRESSOR
 
     # Future hours are a fixed one-hour grid after the origin.
@@ -141,7 +157,7 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
 
     binary, times, static = repeat(batch["binary"]), repeat(times), repeat(batch["static"])
     keep = keep.repeat_interleave(paths, dim=0)
-    means = pulse.cont_means.to(torch.float32)
+    means = core.cont_means.to(torch.float32)
     # Only events already recorded by the origin may alter the recorded rows.
     past = binary.clone()
     past[:, start + 1:] = 0
@@ -160,6 +176,9 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
     hist_time[:, :start + 1] = times[:, :start + 1]
     lengths = torch.full((rows_total,), start + 1, device=cont.device, dtype=torch.long)
     table = sobol_table(paths, cont.device) if arm.sobol else None
+    feedback = (RolloutFeedback(pulse, rows_total, steps, quantiles=arm.quantiles, probabilities=arm.probabilities)
+                if arm.feedback else None)
+    extra = None if feedback is None else feedback.extra()
     path_of_row = torch.arange(rows_total, device=cont.device) % paths
 
     def uniforms(probs: torch.Tensor, columns: list[int], hour: int) -> torch.Tensor:
@@ -172,8 +191,10 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
         binary_hist = hist_bin.clone()
         history = {"continuous": hist_cont, "binary": binary_hist, "continuous_mask": hist_mask,
                    "time_hours": hist_time, "static": static, "padding_mask": padding}
-        x = pulse.inputs(history)
-        logits = pulse.binary_logits(x)
+        if feedback is not None and t == start:
+            feedback.prefix(history, policy, start + 1)
+        x = core.inputs(history)
+        logits = core.binary_logits(x, extra)
         last = (lengths - 1).view(-1, 1, 1).expand(-1, 1, logits.shape[-1])
         if arm.two_pass:
             bin_probs = torch.sigmoid(logits).gather(1, last)[:, 0, :]
@@ -186,7 +207,7 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
             override = realised.clone()
             override[:, :-1] = realised[:, 1:]
             override[torch.arange(rows_total, device=cont.device), lengths - 1] = next_outcomes
-            out = pulse.next_outputs(x, logits, override, lengths)
+            out = core.next_outputs(x, logits, override, lengths, extra)
         else:
             # The continuous encoders see next-hour binaries drawn afresh for
             # every history row, the last row's draw becoming the new hour.
@@ -195,7 +216,7 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
             # the published sample arm drew for every row.
             probs = torch.sigmoid(logits)
             drawn = (torch.rand_like(probs) < probs).float()
-            out = pulse.next_outputs(x, logits, drawn, lengths)
+            out = core.next_outputs(x, logits, drawn, lengths)
             next_outcomes = drawn.gather(1, last)[:, 0, :]
             bin_probs = out["bin_probs"][:, 0, :]
 
@@ -205,7 +226,7 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
 
         params = {k: torch.stack([p[k][:, 0] for p in out["dist_params_list"]], 1)
                   for k in cnf.FLOW_KEYS}
-        draw = pulse.denormalize(cnf.sample(params).unsqueeze(1), primary).squeeze(1)
+        draw = core.denormalize(cnf.sample(params).unsqueeze(1), primary).squeeze(1)
         draw = torch.min(torch.max(draw, low[primary]), high[primary])
         next_cont = cont[:, t, :].clone()
         next_cont[:, primary] = draw
@@ -256,11 +277,13 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
                 append_time[torch.searchsorted(rows, timed)] = hist_time[timed, lengths[timed] - 1] + gap[timed]
             hist_time[rows, cols] = append_time
             lengths[rows] += 1
+            if feedback is not None:
+                feedback.record(out, vaso_probs, rows, cols)
 
     return cont.view(n, paths, steps, nv), binary.view(n, paths, steps, -1)
 
 
-def evaluate(pulse: GroupedModel, policy: Policy, arm: Arm, test: Part, k: int, paths: int, out: Path,
+def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int, paths: int, out: Path,
              per_call: int = PER_CALL) -> None:
     """Roll out every test patient and write one case file each.
 

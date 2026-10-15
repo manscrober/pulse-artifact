@@ -3,12 +3,14 @@ import json
 import pytest
 import torch
 
+from pulse import feedback as F
 from pulse import model as M
 from pulse import simulate as S
 from pulse.data import load_case
 from synthetic import part, perturb, protocol
 
 PATHS, PER_CALL = 4, 2
+ARMS = ["sample", "sample_twopass", "sample_sobol", "sampled_state", "quantile_only", "probability_only"]
 
 
 def models():
@@ -17,10 +19,13 @@ def models():
     policy = M.build_policy(protocol())
     perturb(pulse, seed=1)
     perturb(policy, seed=2)
-    return pulse, policy
+    torch.manual_seed(77)
+    model = F.FeedbackPULSE(pulse)
+    perturb(model, seed=3, rename=lambda n: None if n.startswith("pulse.") else n)
+    return model, policy
 
 
-@pytest.mark.parametrize("arm", ["sample", "sample_twopass", "sample_sobol"])
+@pytest.mark.parametrize("arm", ARMS)
 def test_against_reference(expected, arm, tmp_path):
     pulse, policy = models()
     test = part(seed=5, n=3)
@@ -32,7 +37,7 @@ def test_against_reference(expected, arm, tmp_path):
             expected(f"{arm}.k{k}.case{i}.binary", case["binary"])
 
 
-@pytest.mark.parametrize("arm", ["sample", "sample_twopass", "sample_sobol"])
+@pytest.mark.parametrize("arm", ARMS)
 def test_generator_after_each_call(expected, arm):
     pulse, policy = models()
     test = part(seed=5, n=3)
@@ -56,6 +61,8 @@ def test_sobol_table_leaves_generator_alone():
 def test_arm_rules():
     with pytest.raises(ValueError):
         S.Arm("sample", sobol=True)
+    with pytest.raises(ValueError):
+        S.Arm("sample", two_pass=True, quantiles=True)
 
 
 def test_rollout_settings_are_recorded_and_checked(tmp_path):
