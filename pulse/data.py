@@ -1,4 +1,8 @@
-"""Prepared data, the training protocol and rollout case files.
+"""Cohort cache, data preparation, the training protocol and rollout case files.
+
+The cache holds every ICU stay of the cohort on a 24-hour grid in physical
+units. Preparation splits subjects, scales with training statistics only,
+fills missing values and groups the continuous variables for the encoders.
 
 A `Part` is one split as a dictionary of tensors with N patients, T hours,
 V continuous variables, K binary variables and S static columns:
@@ -12,11 +16,17 @@ V continuous variables, K binary variables and S static columns:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import numpy as np
 import torch
+from scipy.cluster.hierarchy import fcluster, linkage
+from scipy.spatial.distance import squareform
+
+from pulse import variables as V
 
 Part = dict[str, torch.Tensor]
 
@@ -68,3 +78,166 @@ def load_case(directory: Path, case: int) -> dict:
     if payload["case"] != case:
         raise ValueError(f"case file {case} holds case {payload['case']}")
     return payload
+
+
+# Subjects per split in the published cohort (strict first stay per subject).
+SPLIT = {"train": 7147, "val": 893, "test": 894}
+SPLIT_SEED = 42
+SELECTION_SEED = 724
+CACHE_TENSORS = ("continuous", "continuous_mask", "binary", "time_hours", "static",
+                 "subject_ids", "stay_ids", "hadm_ids")
+
+
+def save_cache(cache: dict, path: Path) -> Path:
+    """Write the cohort tensors [N, T, ...] and their variable names."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {key: cache[key] for key in CACHE_TENSORS}
+    payload.update(continuous_names=list(V.CONTINUOUS), binary_names=list(V.BINARY), static_names=list(V.STATIC))
+    pending = path.with_suffix(".pending")
+    torch.save(payload, pending)
+    pending.replace(path)
+    return path
+
+
+NAME_LISTS = ("continuous_names", "binary_names", "static_names")
+
+
+def cache_digest(cache: dict) -> str:
+    """SHA-256 over the cache content: each tensor's dtype, shape and bytes, then the name lists.
+
+    The digest is independent of the file name and of the serialisation
+    format, which both change the bytes of a `torch.save` file.
+    """
+    digest = hashlib.sha256()
+    for key in CACHE_TENSORS:
+        tensor = cache[key].contiguous()
+        digest.update(f"{key}:{tensor.dtype}:{list(tensor.shape)}\n".encode())
+        digest.update(tensor.numpy().tobytes())
+    for key in NAME_LISTS:
+        digest.update(json.dumps([key, list(cache[key])]).encode())
+    return digest.hexdigest()
+
+
+def load_cache(path: Path) -> dict:
+    """Read a cache written by `save_cache` and record its content digest as `sha256`."""
+    cache = torch.load(path, map_location="cpu", weights_only=True)
+    for key, names in zip(NAME_LISTS, (V.CONTINUOUS, V.BINARY, V.STATIC)):
+        if list(cache[key]) != list(names):
+            raise ValueError(f"{path}: {key} differ from pulse.variables")
+    cache["sha256"] = cache_digest(cache)
+    return cache
+
+
+def split(subject_ids: torch.Tensor) -> dict[str, np.ndarray]:
+    """Cache rows of the train, validation and test stays.
+
+    Subjects are shuffled with a fixed seed and cut into consecutive blocks
+    of the sizes in `SPLIT`; each subject contributes only its first stay in
+    cache order. Rows keep cache order within each split.
+    """
+    ids = np.asarray(subject_ids)
+    subjects = np.unique(ids)
+    np.random.default_rng(SPLIT_SEED).shuffle(subjects)
+    if len(subjects) < sum(SPLIT.values()):
+        raise ValueError(f"the cache holds {len(subjects)} subjects; the split needs {sum(SPLIT.values())}")
+    eligible = np.sort(np.unique(ids, return_index=True)[1])
+    ends = np.cumsum(list(SPLIT.values()))
+    blocks = np.split(subjects, ends)[:len(SPLIT)]
+    return {name: eligible[np.isin(ids[eligible], block)] for name, block in zip(SPLIT, blocks)}
+
+
+def _mean_filled(values: torch.Tensor, mask: torch.Tensor) -> np.ndarray:
+    values, mask = values.numpy(), mask.numpy()
+    means = (values * mask).sum(axis=(0, 1)) / np.maximum(mask.sum(axis=(0, 1)), 1.0)
+    return np.where(mask > 0.5, values, means.reshape(1, 1, -1)).reshape(-1, values.shape[-1])
+
+
+def _abs_correlation(matrix: np.ndarray) -> np.ndarray:
+    corr = np.abs(np.nan_to_num(np.corrcoef(matrix, rowvar=False), nan=0.0, posinf=0.0, neginf=0.0))
+    np.fill_diagonal(corr, 1.0)
+    return corr
+
+
+def covariance_groups(continuous: torch.Tensor, mask: torch.Tensor, groups: int = 6) -> dict[str, list[str]]:
+    """Group the non-treatment variables by average-linkage clustering, then add the treatments.
+
+    `continuous` [N, T, V] are the training inputs and `mask` [N, T, V] marks
+    recorded values. Similarity combines absolute correlations of levels and
+    of hour-to-hour changes, each filled with its own mean where unrecorded.
+    """
+    outcomes = [i for i, name in enumerate(V.CONTINUOUS) if name not in V.TREATMENTS]
+    x, m = continuous[..., outcomes], mask[..., outcomes]
+    levels = _abs_correlation(_mean_filled(x, m))
+    changes = _abs_correlation(_mean_filled(x[:, 1:, :] - x[:, :-1, :], m[:, 1:, :] * m[:, :-1, :]))
+    # The reference implementation weighted a residual correlation by 0.5 and
+    # used the change correlation for it; the sum keeps its rounding.
+    similarity = 0.2 * levels + 0.3 * changes + 0.5 * changes
+    np.fill_diagonal(similarity, 1.0)
+    distance = 1.0 - np.clip(similarity, 0.0, 1.0)
+    np.fill_diagonal(distance, 0.0)
+    labels = fcluster(linkage(squareform(distance, checks=False), method="average"), t=groups, criterion="maxclust")
+    result: dict[str, list[str]] = {}
+    for label, name in sorted(zip(labels.tolist(), [V.CONTINUOUS[i] for i in outcomes])):
+        result.setdefault(f"cov_group_{label:02d}", []).append(name)
+    result["continuous_treatments"] = [name for name in V.CONTINUOUS if name in V.TREATMENTS]
+    return result
+
+
+def _part(cache: dict, ids: np.ndarray, x: torch.Tensor, mask: torch.Tensor, mean: torch.Tensor,
+          static: torch.Tensor) -> Part:
+    filled = torch.where(mask[ids], x[ids], mean)
+    for t in range(1, filled.shape[1]):
+        filled[:, t] = torch.where(mask[ids, t], filled[:, t], filled[:, t - 1])
+    return {"continuous": filled, "continuous_target": torch.where(mask[ids], x[ids], mean),
+            "continuous_mask": mask[ids].float(), "binary": cache["binary"][ids].float(),
+            "time_hours": cache["time_hours"][ids].float(), "static": static[ids]}
+
+
+def prepare(cache: dict, protocol: Protocol | None = None) -> Prepared:
+    """Split, select, scale and fill the cohort; fit the covariance groups on training patients.
+
+    Means and SDs of continuous variables use recorded training entries only
+    (SD floor 0.01). Inputs carry the last recorded value forward and start
+    from the training mean; targets put the training mean at unrecorded
+    entries. Static binary columns are left unscaled.
+
+    Given the protocol a checkpoint was trained with, preparation takes the
+    means and SDs from it and checks that the cache, the split and the
+    covariance groups agree. Recomputed statistics can differ from the
+    shipped ones in the last bit on another platform.
+    """
+    rows = split(cache["subject_ids"])
+    chosen = {"train": np.random.default_rng(SELECTION_SEED).permutation(rows["train"]),
+              "val": rows["val"], "test": rows["test"]}
+    x = cache["continuous"].float()
+    mask = cache["continuous_mask"].bool() & torch.isfinite(x)
+    train = chosen["train"]
+    observed = torch.where(mask[train], x[train], torch.nan)
+    mean = torch.nanmean(observed.flatten(0, 1), 0).nan_to_num()
+    sd = torch.nanmean((observed - mean).square().flatten(0, 1), 0).sqrt().nan_to_num(1.0).clamp_min(0.01)
+    static = cache["static"].float()
+    static_mean = static[train].mean(0)
+    static_sd = static[train].std(0, unbiased=False).clamp_min(0.01)
+    static_mean[len(V.STATIC_CONTINUOUS):] = 0.0
+    static_sd[len(V.STATIC_CONTINUOUS):] = 1.0
+    if protocol is not None:
+        if protocol.cache_sha256 != cache["sha256"]:
+            raise ValueError("the protocol was prepared from a different cache")
+        if protocol.split != {name: len(ids) for name, ids in chosen.items()}:
+            raise ValueError("the protocol's split sizes differ from this cache")
+        mean, sd = torch.tensor(protocol.mean), torch.tensor(protocol.sd)
+        static_mean, static_sd = torch.tensor(protocol.static_mean), torch.tensor(protocol.static_sd)
+    scaled = (static - static_mean) / static_sd
+    parts = {name: _part(cache, ids, x, mask, mean, scaled) for name, ids in chosen.items()}
+    groups = covariance_groups(parts["train"]["continuous"], parts["train"]["continuous_mask"])
+    if protocol is not None:
+        if protocol.groups != groups:
+            raise ValueError("the protocol's covariance groups differ from those of this cache")
+        return Prepared(train=parts["train"], val=parts["val"], test=parts["test"], protocol=protocol)
+    protocol = Protocol(
+        continuous_names=list(V.CONTINUOUS), binary_names=list(V.BINARY), static_names=list(V.STATIC),
+        mean=mean.tolist(), sd=sd.tolist(), static_mean=static_mean.tolist(), static_sd=static_sd.tolist(),
+        groups=groups,
+        cache_sha256=cache["sha256"], split={name: len(ids) for name, ids in chosen.items()})
+    return Prepared(train=parts["train"], val=parts["val"], test=parts["test"], protocol=protocol)

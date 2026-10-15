@@ -67,6 +67,11 @@ STATIC_CONTINUOUS = ("Age", "Pre-ICU Fluid Amount", "Elixhauser Score")
 STATIC_BINARY = ("Gender", "End Stage Renal Failure", "Congestive Heart Failure")
 STATIC = STATIC_CONTINUOUS + STATIC_BINARY
 
+# The two treatments the policy sets: the bolus volume, a continuous
+# variable, and the vasopressor indicator, a binary one. The bolus volume
+# forms its own encoder group and is left out of the covariance grouping.
+TREATMENTS = ("Bolus Volume", "Vasopressor Indicator")
+
 # Plausible physical range of each continuous variable. Simulated values are
 # clipped to it, and a variable whose lower bound is positive treats an exact
 # zero as a missing value.
