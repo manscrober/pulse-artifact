@@ -97,6 +97,75 @@ def scored_rollouts(count: int = 5) -> dict[tuple[str, int, int], dict[str, torc
     return result
 
 
+def source_stays(seed: int = 0, count: int = 12) -> list[tuple[dict, dict]]:
+    """Source records of ICU stays in the shape `pulse.hourly.bin_stay` reads, with diagnoses.
+
+    Records fall before, during and after the first 24 hours; values include
+    out-of-range ones, Fahrenheit temperatures, litres, zero rates, missing
+    end times and boluses. Stays die, are released, both or neither.
+    """
+    import numpy as np
+    import pandas as pd
+
+    from pulse import hourly
+
+    rng = np.random.default_rng(seed)
+    low, high = (b.numpy().astype(float) for b in V.bounds())
+    stays = []
+    for s in range(count):
+        intime = pd.Timestamp("2150-01-01") + pd.Timedelta(minutes=int(rng.integers(0, 10**6)))
+
+        def at(hours):
+            return intime + pd.to_timedelta(np.round(np.asarray(hours) * 3600), unit="s")
+
+        rows = []
+        for name in hourly.MEASURED:
+            i = V.CONTINUOUS.index(name)
+            n = int(rng.integers(0, 30))
+            span = high[i] - low[i]
+            values = rng.uniform(low[i] - 0.1 * span, high[i] + 0.1 * span, n)
+            items = rng.choice([hourly.FAHRENHEIT_ITEM, 223762] if name == "Temperature" else [1000 + i, 2000 + i], n)
+            if name == "Temperature":
+                values = np.where(items == hourly.FAHRENHEIT_ITEM, values * 9 / 5 + 32, values)
+            rows.append(pd.DataFrame({"variable": name, "itemid": items, "charttime": at(rng.uniform(-6, 30, n)),
+                                      "valuenum": values}))
+        measurements = pd.concat(rows, ignore_index=True)
+
+        n = 40
+        start = rng.uniform(-8, 28, n)
+        minutes = np.where(rng.random(n) < 0.3, rng.uniform(0, 4.9, n), rng.uniform(5, 600, n))
+        labels = rng.choice(["Norepinephrine", "Phenylephrine (50/250)", "Furosemide (Lasix)", "NaCl 0.9%",
+                             "Dextrose 5%", "Vasopressin"], n)
+        rateuom = rng.choice(["mL/hour", "mL/min", "mcg/kg/min", None], n)
+        inputs = pd.DataFrame({
+            "stay_id": s, "starttime": at(start), "endtime": at(start + minutes / 60),
+            "amount": np.where(rng.random(n) < 0.1, np.nan, rng.uniform(1, 1500, n)),
+            "amountuom": rng.choice(["mL", "ml", "L", "mg"], n, p=[0.6, 0.2, 0.1, 0.1]),
+            "rate": np.where(rng.random(n) < 0.15, 0.0, rng.uniform(0.5, 200, n)),
+            "rateuom": rateuom, "label": labels})
+        inputs.loc[rng.random(n) < 0.1, "endtime"] = pd.NaT
+        inputs.loc[rng.random(n) < 0.15, "rate"] = np.nan
+
+        n = 30
+        outputs = pd.DataFrame({"charttime": at(rng.uniform(-3, 27, n)), "value": rng.uniform(0, 900, n),
+                                "valueuom": rng.choice(["mL", "L", "cm"], n, p=[0.8, 0.1, 0.1])})
+        n = 6
+        start = rng.uniform(-30, 26, n)
+        procedures = pd.DataFrame({"starttime": at(start), "endtime": at(start + rng.uniform(-1, 40, n)),
+                                   "itemid": rng.choice(list(hourly.VENTILATION_ITEMS + hourly.DIALYSIS_ITEMS) + [225999], n)})
+        diagnoses = pd.DataFrame({"hadm_id": 7000 + s, "icd_code": ["I509", "J810", "N186"], "icd_version": 10,
+                                  "long_title": ["heart failure", "pulmonary edema", "renal failure"]})
+        death, release = [(None, 30), (10.5, None), (None, 7.25), (15.0, 5.0), (40.0, 18.0), (3.0, 3.5)][s % 6]
+        stay = {"stay_id": s, "subject_id": 100 + s, "hadm_id": 7000 + s, "intime": intime,
+                "outtime": intime + pd.Timedelta(hours=release if release is not None else 50 + s),
+                "dod": None if death is None else intime + pd.Timedelta(hours=death),
+                "anchor_age": int(rng.integers(18, 90)), "gender": "M" if s % 2 else "F"}
+        frames = {"measurements": measurements, "inputevents": inputs, "outputevents": outputs,
+                  "procedureevents": procedures}
+        stays.append((frames, dict(stay, diagnoses=diagnoses)))
+    return stays
+
+
 def trajectories(seed: int = 0, n: int = 8, steps: int = 24) -> dict[str, torch.Tensor]:
     g = torch.Generator().manual_seed(seed)
     low, high = V.bounds()

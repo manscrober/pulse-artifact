@@ -242,7 +242,9 @@ def fill_after_events(cont: torch.Tensor, death: Sequence[int] | None = None, re
     After death a variable takes its lower range bound when that is negative
     and zero otherwise; after release it takes the training mean `means` [V].
     `death` and `release` hold one hour per row, or a single hour that
-    applies to every row; an hour of T or later means no event.
+    applies to every row; an hour of T or later means no event. This is the
+    rule of rollouts and evaluation; the cache was filled by a different
+    rule from each stay's own statistics (`pulse.hourly`).
     """
     filled = cont.clone()
     n, steps, _ = filled.shape
