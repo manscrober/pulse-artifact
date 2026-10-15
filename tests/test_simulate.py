@@ -20,7 +20,7 @@ def models():
     return pulse, policy
 
 
-@pytest.mark.parametrize("arm", ["sample"])
+@pytest.mark.parametrize("arm", ["sample", "sample_twopass"])
 def test_against_reference(expected, arm, tmp_path):
     pulse, policy = models()
     test = part(seed=5, n=3)
@@ -32,7 +32,7 @@ def test_against_reference(expected, arm, tmp_path):
             expected(f"{arm}.k{k}.case{i}.binary", case["binary"])
 
 
-@pytest.mark.parametrize("arm", ["sample"])
+@pytest.mark.parametrize("arm", ["sample", "sample_twopass"])
 def test_generator_after_each_call(expected, arm):
     pulse, policy = models()
     test = part(seed=5, n=3)

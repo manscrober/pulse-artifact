@@ -43,12 +43,19 @@ PER_CALL = 8
 
 @dataclass(frozen=True)
 class Arm:
-    """How a rollout feeds its own output back. `weights` names the trained checkpoint."""
+    """How a rollout feeds its own output back. `weights` names the trained checkpoint.
+
+    `two_pass` draws the next-hour binary outcomes first and conditions the
+    continuous laws on that draw, with the history keeping the outcomes
+    already realised; otherwise the continuous encoders see outcomes drawn
+    afresh for every history row.
+    """
 
     weights: str
+    two_pass: bool = False
 
 
-ARMS = {"sample": Arm("sample")}
+ARMS = {"sample": Arm("sample"), "sample_twopass": Arm("sample", two_pass=True)}
 
 
 def origin_step(k: int) -> int:
@@ -134,17 +141,30 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
         binary_hist = hist_bin.clone()
         history = {"continuous": hist_cont, "binary": binary_hist, "continuous_mask": hist_mask,
                    "time_hours": hist_time, "static": static, "padding_mask": padding}
-        # The continuous encoders see next-hour binaries drawn afresh for
-        # every history row, the last row's draw becoming the new hour
-        # (reproduction constraint).
         x = pulse.inputs(history)
         logits = pulse.binary_logits(x)
-        probs = torch.sigmoid(logits)
-        drawn = (torch.rand_like(probs) < probs).float()
-        out = pulse.next_outputs(x, logits, drawn, lengths)
-        last = (lengths - 1).view(-1, 1, 1).expand(-1, 1, drawn.shape[-1])
-        next_outcomes = drawn.gather(1, last)[:, 0, :]
-        bin_probs = out["bin_probs"][:, 0, :]
+        last = (lengths - 1).view(-1, 1, 1).expand(-1, 1, logits.shape[-1])
+        if arm.two_pass:
+            bin_probs = torch.sigmoid(logits).gather(1, last)[:, 0, :]
+            next_outcomes = (torch.rand_like(bin_probs) < bin_probs).float()
+            # Row j conditions on the outcomes realised at row j + 1 and the
+            # last row on the new draw.
+            realised = binary_hist[..., outcome]
+            override = realised.clone()
+            override[:, :-1] = realised[:, 1:]
+            override[torch.arange(rows_total, device=cont.device), lengths - 1] = next_outcomes
+            out = pulse.next_outputs(x, logits, override, lengths)
+        else:
+            # The continuous encoders see next-hour binaries drawn afresh for
+            # every history row, the last row's draw becoming the new hour.
+            # Drawing only for the last row would be the cleaner form, but it
+            # consumes fewer random numbers and so changes every later draw;
+            # the published sample arm drew for every row.
+            probs = torch.sigmoid(logits)
+            drawn = (torch.rand_like(probs) < probs).float()
+            out = pulse.next_outputs(x, logits, drawn, lengths)
+            next_outcomes = drawn.gather(1, last)[:, 0, :]
+            bin_probs = out["bin_probs"][:, 0, :]
 
         obs_probs = torch.sigmoid(out["obs_logits"][:, 0, :]).clamp(1e-6, 1.0 - 1e-6)
         observed = torch.rand_like(obs_probs) < obs_probs
