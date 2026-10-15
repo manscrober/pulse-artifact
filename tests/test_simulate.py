@@ -20,7 +20,7 @@ def models():
     return pulse, policy
 
 
-@pytest.mark.parametrize("arm", ["sample", "sample_twopass"])
+@pytest.mark.parametrize("arm", ["sample", "sample_twopass", "sample_sobol"])
 def test_against_reference(expected, arm, tmp_path):
     pulse, policy = models()
     test = part(seed=5, n=3)
@@ -32,7 +32,7 @@ def test_against_reference(expected, arm, tmp_path):
             expected(f"{arm}.k{k}.case{i}.binary", case["binary"])
 
 
-@pytest.mark.parametrize("arm", ["sample", "sample_twopass"])
+@pytest.mark.parametrize("arm", ["sample", "sample_twopass", "sample_sobol"])
 def test_generator_after_each_call(expected, arm):
     pulse, policy = models()
     test = part(seed=5, n=3)
@@ -42,6 +42,20 @@ def test_generator_after_each_call(expected, arm):
             S.rollout(pulse, policy, S.ARMS[arm], {key: v[first:first + PER_CALL] for key, v in test.items()},
                       S.origin_step(k), PATHS)
             expected(f"{arm}.k{k}.first{first}.after", torch.rand(2))
+
+
+def test_sobol_table_leaves_generator_alone():
+    torch.manual_seed(0)
+    expected = torch.rand(3)
+    torch.manual_seed(0)
+    table = S.sobol_table(8)
+    assert table.shape == (8, 24, 8) and torch.equal(torch.rand(3), expected)
+    assert torch.equal(table, S.sobol_table(8))
+
+
+def test_arm_rules():
+    with pytest.raises(ValueError):
+        S.Arm("sample", sobol=True)
 
 
 def test_rollout_settings_are_recorded_and_checked(tmp_path):

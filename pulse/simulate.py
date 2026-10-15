@@ -53,9 +53,33 @@ class Arm:
 
     weights: str
     two_pass: bool = False
+    sobol: bool = False
+
+    def __post_init__(self):
+        if self.sobol and not self.two_pass:
+            raise ValueError("Sobol branch draws need the two-pass step")
 
 
-ARMS = {"sample": Arm("sample"), "sample_twopass": Arm("sample", two_pass=True)}
+ARMS = {
+    "sample": Arm("sample"),
+    "sample_twopass": Arm("sample", two_pass=True),
+    "sample_sobol": Arm("sample", two_pass=True, sobol=True),
+}
+
+SOBOL_SEED = 362
+
+
+def sobol_table(paths: int, device=None) -> torch.Tensor:
+    """Scrambled Sobol points [P, T, K]: path p uses row p for every patient, hour t column t.
+
+    With binary branches drawn from these points, the paths of a patient
+    cover the unit cube of branch decisions evenly; the same points serve
+    every patient and arm. The seeded engine leaves the global generator
+    untouched.
+    """
+    steps, k = 24, len(V.BINARY)
+    engine = torch.quasirandom.SobolEngine(steps * k, scramble=True, seed=SOBOL_SEED)
+    return engine.draw(paths).reshape(paths, steps, k).to(device)
 
 
 def origin_step(k: int) -> int:
@@ -135,6 +159,13 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
     hist_mask[:, :start + 1] = keep[:, :start + 1].to(cont.dtype)
     hist_time[:, :start + 1] = times[:, :start + 1]
     lengths = torch.full((rows_total,), start + 1, device=cont.device, dtype=torch.long)
+    table = sobol_table(paths, cont.device) if arm.sobol else None
+    path_of_row = torch.arange(rows_total, device=cont.device) % paths
+
+    def uniforms(probs: torch.Tensor, columns: list[int], hour: int) -> torch.Tensor:
+        if table is None:
+            return torch.rand_like(probs)
+        return table[path_of_row, hour][:, columns].reshape_as(probs)
 
     for t in range(start, steps - 1):
         padding = torch.arange(steps, device=cont.device).unsqueeze(0) >= lengths.unsqueeze(1)
@@ -146,7 +177,9 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
         last = (lengths - 1).view(-1, 1, 1).expand(-1, 1, logits.shape[-1])
         if arm.two_pass:
             bin_probs = torch.sigmoid(logits).gather(1, last)[:, 0, :]
-            next_outcomes = (torch.rand_like(bin_probs) < bin_probs).float()
+            # The reference counts Sobol hours from the origin, one per step,
+            # so the column is the current row t.
+            next_outcomes = (uniforms(bin_probs, outcome, t) < bin_probs).float()
             # Row j conditions on the outcomes realised at row j + 1 and the
             # last row on the new draw.
             realised = binary_hist[..., outcome]
@@ -184,7 +217,7 @@ def rollout(pulse: GroupedModel, policy: Policy, arm: Arm, batch: Part, start: i
         # runs read the last row.
         treatment = policy.treatments(hist_cont, binary_hist, static, hist_time)
         vaso_probs = torch.sigmoid(treatment["binary_treatment_logits"][:, -1, :])
-        vaso_draw = (torch.rand_like(vaso_probs) < vaso_probs).float()
+        vaso_draw = (uniforms(vaso_probs, [vaso], t) < vaso_probs).float()
         next_cont[:, [bolus]] = treatment["continuous_treatments"][:, -1, :]
 
         next_bin = binary[:, t, :].clone()
