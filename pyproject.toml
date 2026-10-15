@@ -1,0 +1,27 @@
+[project]
+name = "pulse"
+version = "1.0.0"
+description = "PULSE: probabilistic ICU trajectory simulation with distribution feedback"
+requires-python = ">=3.11"
+dependencies = [
+    "torch==2.13.0",
+    "numpy==2.3.4",
+    "scipy==1.17.1",
+    "pandas==2.3.3",
+]
+
+[project.optional-dependencies]
+# Only building the cohort from the MIMIC-IV database needs PostgreSQL access.
+cohort = ["psycopg2-binary==2.9.11"]
+test = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["pulse"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
