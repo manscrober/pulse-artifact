@@ -195,3 +195,48 @@ def cnf_inputs(seed: int = 0, rows: int = 5, variables: int = 36) -> dict[str, t
             "anchor": torch.randn(rows, variables, generator=g),
             "target": 2.0 * torch.randn(rows, variables, generator=g),
             "z": torch.randn(rows, variables, generator=g)}
+
+
+def protocol():
+    """A protocol with six interleaved covariance groups and unit-free statistics."""
+    from pulse.data import Protocol
+
+    names = [n for n in V.CONTINUOUS if n not in V.TREATMENTS]
+    groups = {f"cov_group_{g + 1:02d}": names[g::6] for g in range(6)}
+    groups["continuous_treatments"] = [V.CONTINUOUS[V.BOLUS]]
+    low, high = V.bounds()
+    return Protocol(continuous_names=list(V.CONTINUOUS), binary_names=list(V.BINARY),
+                    static_names=list(V.STATIC), mean=((low + high) / 2).tolist(),
+                    sd=((high - low) / 6).tolist(), static_mean=[0.0] * 6, static_sd=[1.0] * 6,
+                    groups=groups, cache_sha256="0" * 64, split={"train": 0, "val": 0, "test": 0})
+
+
+def part(seed: int = 0, n: int = 4, steps: int = 24) -> dict[str, torch.Tensor]:
+    """One split in the prepared format: irregular hours, forward-filled inputs and masks."""
+    g = torch.Generator().manual_seed(seed)
+    data = trajectories(seed, n, steps)
+    mask = data["keep"].float()
+    mask[:, 0] = 1.0
+    target = torch.where(mask > 0, data["continuous"], data["means"])
+    filled = target.clone()
+    for t in range(1, steps):
+        filled[:, t] = torch.where(mask[:, t] > 0, filled[:, t], filled[:, t - 1])
+    gaps = 0.25 + 1.5 * torch.rand(n, steps, generator=g)
+    hours = torch.cumsum(gaps, 1) - gaps[:, :1]
+    static = torch.randn(n, len(V.STATIC), generator=g)
+    static[:, 3:] = (static[:, 3:] > 0).float()
+    return {"continuous": filled, "continuous_target": target, "continuous_mask": mask,
+            "binary": data["binary"], "time_hours": hours, "static": static}
+
+
+def perturb(module: torch.nn.Module, seed: int = 1, scale: float = 0.1, rename=lambda name: name) -> None:
+    """Add seeded noise to every parameter so zero-initialised layers act.
+
+    Noise is drawn in the order of the artifact's parameter names; `rename`
+    maps another module's names to those, or to None for parameters it lacks.
+    """
+    g = torch.Generator().manual_seed(seed)
+    named = {rename(name): p for name, p in module.named_parameters()}
+    with torch.no_grad():
+        for name in sorted(k for k in named if k is not None):
+            named[name].add_(scale * torch.randn(named[name].shape, generator=g))

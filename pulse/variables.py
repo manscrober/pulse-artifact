@@ -125,6 +125,8 @@ ZERO_INVALID = tuple(i for i, name in enumerate(CONTINUOUS) if RANGES[name][0] >
 
 DEATH = BINARY.index("In-Hospital Mortality Indicator")
 RELEASE = BINARY.index("Release Indicator")
+BOLUS = CONTINUOUS.index(TREATMENTS[0])
+VASOPRESSOR = BINARY.index(TREATMENTS[1])
 
 _C = {name: i for i, name in enumerate(CONTINUOUS)}
 
