@@ -186,3 +186,12 @@ def trajectories(seed: int = 0, n: int = 8, steps: int = 24) -> dict[str, torch.
     means = low + (high - low) * torch.rand(len(V.CONTINUOUS), generator=g)
     event_now = torch.rand(n, generator=g) < 0.3
     return {"continuous": cont, "keep": keep, "binary": binary, "means": means, "event_now": event_now}
+
+
+def cnf_inputs(seed: int = 0, rows: int = 5, variables: int = 36) -> dict[str, torch.Tensor]:
+    """Raw head outputs [R, V, 26], anchors, targets and base draws [R, V]."""
+    g = torch.Generator().manual_seed(seed)
+    return {"raw": 1.5 * torch.randn(rows, variables, 26, generator=g),
+            "anchor": torch.randn(rows, variables, generator=g),
+            "target": 2.0 * torch.randn(rows, variables, generator=g),
+            "z": torch.randn(rows, variables, generator=g)}
