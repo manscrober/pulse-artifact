@@ -10,7 +10,7 @@ from pulse.data import load_case
 from synthetic import part, perturb, protocol
 
 PATHS, PER_CALL = 4, 2
-ARMS = ["sample", "sample_twopass", "sample_sobol", "sampled_state", "quantile_only", "probability_only"]
+ARMS = list(S.ARMS)
 
 
 def models():

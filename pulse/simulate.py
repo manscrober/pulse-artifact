@@ -51,8 +51,9 @@ class Arm:
     already realised; otherwise the continuous encoders see outcomes drawn
     afresh for every history row. `feedback` keeps the descriptor history
     of `pulse.feedback`; `quantiles` and `probabilities` choose which
-    descriptors the model reads. `sobol` draws binary branches from a
-    shared Sobol table.
+    descriptors the model reads, and `mean_state` replaces the sampled
+    values in the history by predictive means. `sobol` draws binary
+    branches from a shared Sobol table.
     """
 
     weights: str
@@ -60,12 +61,13 @@ class Arm:
     feedback: bool = False
     quantiles: bool = False
     probabilities: bool = False
+    mean_state: bool = False
     sobol: bool = False
 
     def __post_init__(self):
         if (self.sobol or self.feedback) and not self.two_pass:
             raise ValueError("Sobol draws and feedback need the two-pass step")
-        if (self.quantiles or self.probabilities) and not self.feedback:
+        if (self.quantiles or self.probabilities or self.mean_state) and not self.feedback:
             raise ValueError("descriptors need feedback")
 
 
@@ -73,6 +75,12 @@ ARMS = {
     "sample": Arm("sample"),
     "sample_twopass": Arm("sample", two_pass=True),
     "sample_sobol": Arm("sample", two_pass=True, sobol=True),
+    # The combined method.
+    "distribution": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
+                        mean_state=True, sobol=True),
+    "no_sobol": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
+                    mean_state=True),
+    "mean_only": Arm("sample", two_pass=True, feedback=True, mean_state=True),
     # Descriptors of both kinds with the simulator's own sampled values in the history.
     "sampled_state": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
                          sobol=True),
@@ -176,8 +184,8 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: 
     hist_time[:, :start + 1] = times[:, :start + 1]
     lengths = torch.full((rows_total,), start + 1, device=cont.device, dtype=torch.long)
     table = sobol_table(paths, cont.device) if arm.sobol else None
-    feedback = (RolloutFeedback(pulse, rows_total, steps, quantiles=arm.quantiles, probabilities=arm.probabilities)
-                if arm.feedback else None)
+    feedback = (RolloutFeedback(pulse, rows_total, steps, quantiles=arm.quantiles, probabilities=arm.probabilities,
+                                mean_state=arm.mean_state) if arm.feedback else None)
     extra = None if feedback is None else feedback.extra()
     path_of_row = torch.arange(rows_total, device=cont.device) % paths
 
@@ -191,8 +199,10 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: 
         binary_hist = hist_bin.clone()
         history = {"continuous": hist_cont, "binary": binary_hist, "continuous_mask": hist_mask,
                    "time_hours": hist_time, "static": static, "padding_mask": padding}
-        if feedback is not None and t == start:
-            feedback.prefix(history, policy, start + 1)
+        if feedback is not None:
+            if t == start:
+                feedback.prefix(history, policy, start + 1)
+            history["continuous"] = feedback.history_values(hist_cont)
         x = core.inputs(history)
         logits = core.binary_logits(x, extra)
         last = (lengths - 1).view(-1, 1, 1).expand(-1, 1, logits.shape[-1])
@@ -236,7 +246,7 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: 
         # the bolus volume and the vasopressor draw. Reading the last valid row
         # would be the cleaner form, but it changes every rollout; the published
         # runs read the last row.
-        treatment = policy.treatments(hist_cont, binary_hist, static, hist_time)
+        treatment = policy.treatments(history["continuous"], binary_hist, static, hist_time)
         vaso_probs = torch.sigmoid(treatment["binary_treatment_logits"][:, -1, :])
         vaso_draw = (uniforms(vaso_probs, [vaso], t) < vaso_probs).float()
         next_cont[:, [bolus]] = treatment["continuous_treatments"][:, -1, :]
@@ -277,8 +287,11 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: 
                 append_time[torch.searchsorted(rows, timed)] = hist_time[timed, lengths[timed] - 1] + gap[timed]
             hist_time[rows, cols] = append_time
             lengths[rows] += 1
-            if feedback is not None:
-                feedback.record(out, vaso_probs, rows, cols)
+        else:
+            rows = cols = torch.empty(0, device=cont.device, dtype=torch.long)
+        if feedback is not None:
+            feedback.record(out, vaso_probs, rows, cols, step=t, generated=cont[:, t + 1, :], recorded=next_mask,
+                            baseline=baseline)
 
     return cont.view(n, paths, steps, nv), binary.view(n, paths, steps, -1)
 

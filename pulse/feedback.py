@@ -211,11 +211,20 @@ class RolloutFeedback:
     which it was drawn: CNF quantiles for every continuous variable, recorded
     or not, the binary probabilities and the policy's vasopressor
     probability.
+
+    With `mean_state` the model and the policy read a separate numerical
+    history in place of the sampled values: each generated row holds the
+    predictive means of the recorded variables, clipped to their ranges,
+    the previous mean state for unrecorded ones, the bolus volume given,
+    and derived variables recomputed on that state.
     """
 
-    def __init__(self, pulse: FeedbackPULSE, rows: int, steps: int, *, quantiles: bool, probabilities: bool):
+    def __init__(self, pulse: FeedbackPULSE, rows: int, steps: int, *, quantiles: bool, probabilities: bool,
+                 mean_state: bool = False):
         device = pulse.pulse.cont_means.device
         self.pulse, self.quantiles, self.probabilities = pulse, quantiles, probabilities
+        self.mean_state = mean_state
+        self.values = self.state = None
         nv, nk = len(V.CONTINUOUS), len(V.BINARY)
         self.descriptors = (torch.zeros(rows, steps, nv, len(PROBABILITIES), device=device),
                             torch.zeros(rows, steps, nv, device=device),
@@ -224,9 +233,20 @@ class RolloutFeedback:
     def extra(self) -> Extra | None:
         return self.pulse.extra(self.descriptors, self.quantiles, self.probabilities)
 
+    def history_values(self, continuous: torch.Tensor) -> torch.Tensor:
+        """The numerical history [R, T, V] the model and the policy read."""
+        return self.values[:, :continuous.shape[1]] if self.mean_state else continuous
+
     @torch.no_grad()
     def prefix(self, history: dict[str, torch.Tensor], policy: Policy, length: int) -> None:
-        """Teacher-forced descriptors for rows 1 to `length - 1` of the recorded prefix."""
+        """Teacher-forced descriptors for rows 1 to `length - 1` of the recorded prefix.
+
+        Also starts the mean state from the recorded rows.
+        """
+        if self.mean_state:
+            self.values = history["continuous"].clone()
+            self.state = torch.zeros_like(self.values)
+            self.state[:, :length] = history["continuous"][:, :length]
         core = self.pulse.pulse
         outcomes = history["binary"][:, :, core.binary_output_indices]
         hours = history.get("time_hours")
@@ -243,14 +263,39 @@ class RolloutFeedback:
             dpm[:, 0, V.VASOPRESSOR] = 1.0
             q[:, j], present[:, j], p[:, j], p_present[:, j] = dq[:, 0], dm[:, 0], dp[:, 0], dpm[:, 0]
 
-    def record(self, outputs: dict, vasopressor: torch.Tensor, rows: torch.Tensor, cols: torch.Tensor) -> None:
+    def record(self, outputs: dict, vasopressor: torch.Tensor, rows: torch.Tensor, cols: torch.Tensor, *,
+               step: int, generated: torch.Tensor, recorded: torch.Tensor, baseline: torch.Tensor) -> None:
         """Store the laws of the step at history column `cols` of the appended `rows`.
 
         `vasopressor` [R, 1] is the sigmoid of the policy logit used for the
-        draw.
+        draw. `generated` [R, V] is the simulator's new row `step + 1` and
+        `recorded` [R, V] marks its recorded variables; the mean state
+        advances every step, whether or not a row joins the history.
         """
+        if self.mean_state:
+            self._advance_mean_state(outputs, step, generated, recorded, baseline)
         q, present, p, p_present = self.pulse.distribution_tensors(outputs, (len(vasopressor), 1, len(V.CONTINUOUS)))
         p[:, 0, V.VASOPRESSOR] = vasopressor[:, 0]
         p_present[:, 0, V.VASOPRESSOR] = 1.0
         for stored, value in zip(self.descriptors, (q, present, p, p_present)):
             stored[rows, cols] = value[rows, 0]
+        if self.mean_state:
+            self.values[rows, cols] = self.state[rows, step + 1]
+
+    def _advance_mean_state(self, outputs: dict, step: int, generated: torch.Tensor, recorded: torch.Tensor,
+                            baseline: torch.Tensor) -> None:
+        core = self.pulse.pulse
+        low, high = V.bounds()
+        point = self.state[:, step].clone()
+        for idx, params in zip(core.output_indices, outputs["dist_params_list"]):
+            # One quadrature call per variable, on [R, 1], as in the reference
+            # implementation. A single call on all variables gives the same
+            # values on CPU in the tests here; the per-variable form is kept so
+            # that other devices follow the published computation step by step.
+            value = core.denormalize(cnf.mean(params).unsqueeze(-1), [idx])[:, 0, 0]
+            value = value.clamp(low[idx].item(), high[idx].item())
+            point[:, idx] = torch.where(recorded[:, idx].bool(), value, point[:, idx])
+        bolus = V.BOLUS
+        point[:, bolus] = generated[:, bolus]
+        self.state[:, step + 1] = V.forward_fill_zero_invalid(point, self.state[:, step])
+        V.update_derived(self.state, step + 1, baseline)
