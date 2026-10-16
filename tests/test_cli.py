@@ -29,6 +29,8 @@ def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp
         cli.main(["train", "--phases", "unknown"])
     with pytest.raises(SystemExit, match="policy must come first"):
         cli.main(["train", "--out", str(tmp_path), "--phases", "sample", "policy"])
+    with pytest.raises(SystemExit, match="more than once"):
+        cli.main(["train", "--out", str(tmp_path), "--phases", "policy", "sample", "policy"])
     assert len(calls) == 2 and len(prepared) == 1  # refused lists prepare nothing
 
 

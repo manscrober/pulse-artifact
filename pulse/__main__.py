@@ -130,6 +130,10 @@ def train(args) -> None:
     # would leave them reading an older policy.pt.
     if "policy" in phases and phases.index("policy") > 0:
         raise SystemExit(f"policy must come first: {phases[:phases.index('policy')]} read the trained policy")
+    # A repeated policy phase would overwrite policy.pt after patient models
+    # were trained against the first one.
+    if phases.count("policy") > 1:
+        raise SystemExit("policy is named more than once in --phases")
     prepared = _prepare(args.cache, args.protocol)
     policy = None
     for phase in phases:
