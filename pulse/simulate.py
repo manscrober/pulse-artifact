@@ -172,7 +172,7 @@ class _EventHistory:
 
 
 def _next_binaries(core, arm: Arm, x: dict, logits: torch.Tensor, history: _EventHistory, uniforms, hour: int,
-                   extra) -> tuple[dict, torch.Tensor, torch.Tensor]:
+                   additions) -> tuple[dict, torch.Tensor, torch.Tensor]:
     """The next-hour outputs, the drawn outcomes [R, K_out] and their probabilities [R, K_out]."""
     outcome, lengths = core.binary_output_indices, history.lengths
     last = (lengths - 1).view(-1, 1, 1).expand(-1, 1, logits.shape[-1])
@@ -187,7 +187,7 @@ def _next_binaries(core, arm: Arm, x: dict, logits: torch.Tensor, history: _Even
         override = realised.clone()
         override[:, :-1] = realised[:, 1:]
         override[torch.arange(len(lengths), device=lengths.device), lengths - 1] = outcomes
-        out = core.next_outputs(x, logits, override, lengths, extra)
+        out = core.next_outputs(x, logits, override, lengths, additions)
         return out, outcomes, probs
     # The continuous encoders see next-hour binaries drawn afresh for every
     # history row, the last row's draw becoming the new hour. Drawing only
@@ -224,7 +224,6 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
     table = sobol_table(paths, cont.device) if arm.sobol else None
     feedback = (RolloutFeedback(pulse, rows_total, steps, quantiles=arm.quantiles, probabilities=arm.probabilities,
                                 mean_state=arm.mean_state) if arm.feedback else None)
-    extra = None if feedback is None else feedback.extra()
     path_of_row = torch.arange(rows_total, device=cont.device) % paths
 
     def uniforms(probs: torch.Tensor, columns: list[int], hour: int) -> torch.Tensor:
@@ -240,8 +239,9 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
                 feedback.prefix(model_input, policy, first_forecast_row(k))
             model_input["continuous"] = feedback.history_values(history.continuous)
         x = core.inputs(model_input)
-        logits = core.binary_logits(x, extra)
-        out, next_outcomes, bin_probs = _next_binaries(core, arm, x, logits, history, uniforms, t, extra)
+        additions = None if feedback is None else feedback.additions()
+        logits = core.binary_logits(x, additions)
+        out, next_outcomes, bin_probs = _next_binaries(core, arm, x, logits, history, uniforms, t, additions)
 
         obs_probs = torch.sigmoid(out["obs_logits"][:, 0, :]).clamp(1e-6, 1.0 - 1e-6)
         observed = torch.rand_like(obs_probs) < obs_probs

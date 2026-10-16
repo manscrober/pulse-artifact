@@ -26,7 +26,7 @@ from torch import nn
 from pulse import cnf
 from pulse import variables as V
 from pulse.data import Protocol
-from pulse.model import SEED, Extra, GroupedModel, Policy, pulse_model
+from pulse.model import SEED, Additions, GroupedModel, Policy, pulse_model
 
 PROBABILITIES = (0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95,
                  0.975, 0.99, 0.995, 0.999)
@@ -189,21 +189,21 @@ class FeedbackPULSE(nn.Module):
             p.requires_grad_(False)
         object.__setattr__(self, "policy", policy)
 
-    def extra(self, descriptors: Descriptors, quantiles: bool, probabilities: bool) -> Extra | None:
+    def additions(self, descriptors: Descriptors, quantiles: bool, probabilities: bool) -> Additions | None:
         """Additions to each encoder's projected inputs, probability adapter first."""
         q, present, p, p_present = descriptors
         if not (quantiles or probabilities):
             return None
-
-        def add(index: int, h: torch.Tensor) -> torch.Tensor:
+        values = torch.cat((p * p_present, p_present), -1)
+        terms = []
+        for index in range(len(self.pulse.encoders)):
+            add = []
             if probabilities:
-                values = torch.cat((p * p_present, p_present), -1)
-                h = h + self.probability_adapters[index](values) * p_present.any(-1, keepdim=True)
+                add.append(self.probability_adapters[index](values) * p_present.any(-1, keepdim=True))
             if quantiles:
-                h = h + self.adapters[index](q, present).to(h.dtype)
-            return h
-
-        return add
+                add.append(self.adapters[index](q, present))
+            terms.append(tuple(add))
+        return terms
 
     def distribution_tensors(self, outputs: dict, shape: torch.Size) -> Descriptors:
         """Descriptors [B, T, V, 19], [B, T, V], [B, T, K], [B, T, K] of model outputs.
@@ -249,7 +249,7 @@ class FeedbackPULSE(nn.Module):
                 return torch.cat((torch.zeros_like(v[:, :1]), v[:, :-1]), 1)
 
             descriptors = tuple(lag(v) for v in (q, present, p, p_present))
-        return self.pulse(history, extra=self.extra(descriptors, quantiles, probabilities))
+        return self.pulse(history, additions=self.additions(descriptors, quantiles, probabilities))
 
 
 def build_pulse(protocol: Protocol, train_binary: torch.Tensor) -> FeedbackPULSE:
@@ -288,8 +288,9 @@ class RolloutFeedback:
                             torch.zeros(rows, steps, nv, device=device),
                             torch.zeros(rows, steps, nk, device=device), torch.zeros(rows, steps, nk, device=device))
 
-    def extra(self) -> Extra | None:
-        return self.pulse.extra(self.descriptors, self.quantiles, self.probabilities)
+    def additions(self) -> Additions | None:
+        """The adapter additions of the descriptors recorded so far."""
+        return self.pulse.additions(self.descriptors, self.quantiles, self.probabilities)
 
     def history_values(self, continuous: torch.Tensor) -> torch.Tensor:
         """The numerical history [R, T, V] the model and the policy read."""

@@ -23,7 +23,6 @@ not predict, and the gate layers drawn and discarded in `Encoder`.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
 from pathlib import Path
 
 import torch
@@ -55,8 +54,9 @@ POLICY_GROUPS = {
     "others": [V.CONTINUOUS[V.BOLUS]],
 }
 
-# An optional function per encoder that adds to the projected inputs [B, T, H].
-Extra = Callable[[int, torch.Tensor], torch.Tensor]
+# Per encoder, tensors [B, T, H] added in order to its projected inputs:
+# the outputs of the descriptor adapters of `pulse.feedback`.
+Additions = list[tuple[torch.Tensor, ...]]
 
 
 class TimeEncoding(nn.Module):
@@ -118,10 +118,10 @@ class Encoder(nn.Module):
                 nn.Linear(width, 1)
 
     def encode(self, x: torch.Tensor, hours: torch.Tensor, mask: torch.Tensor, padding: torch.Tensor | None,
-               extra: Callable[[torch.Tensor], torch.Tensor] | None = None) -> torch.Tensor:
+               add: tuple[torch.Tensor, ...] = ()) -> torch.Tensor:
         h = self.input_proj(x)
-        if extra is not None:
-            h = extra(h)
+        for term in add:
+            h = h + term.to(h.dtype)
         h = h + self.time_encoder(hours).to(h.dtype)
         return self.transformer(h, mask=mask, src_key_padding_mask=padding, is_causal=True)
 
@@ -254,28 +254,28 @@ class GroupedModel(nn.Module):
                 "causal": torch.triu(torch.ones(t, t, device=cont.device), diagonal=1).bool(),
                 "factual_binary": binary}
 
-    def _run(self, index: int, history: torch.Tensor, x: dict, extra: Extra | None) -> dict:
+    def _run(self, index: int, history: torch.Tensor, x: dict, additions: Additions | None) -> dict:
         t = history.shape[1]
         features = torch.cat([history, x["treatments"], x["static"].unsqueeze(1).expand(-1, t, -1)], -1)
-        add = None if extra is None else (lambda h: extra(index, h))
+        add = () if additions is None else additions[index]
         h = self.encoders[index].encode(features, x["hours"], x["causal"], x["padding"], add)
         return self.encoders[index].predict(h)
 
     # Outputs --------------------------------------------------------------
 
-    def binary_logits(self, x: dict, extra: Extra | None = None) -> torch.Tensor:
+    def binary_logits(self, x: dict, additions: Additions | None = None) -> torch.Tensor:
         """Next-hour logits of the binary outcomes, [B, T, K_out]."""
-        out = self._run(self.binary_group, x["history"], x, extra)
+        out = self._run(self.binary_group, x["history"], x, additions)
         return torch.stack([out[n]["raw"][..., 0] for n in self.binary_outputs], -1)
 
-    def continuous_outputs(self, x: dict, next_binary: torch.Tensor, extra: Extra | None = None) -> dict:
+    def continuous_outputs(self, x: dict, next_binary: torch.Tensor, additions: Additions | None = None) -> dict:
         """Run every continuous group given next-hour binary outcomes [B, T, K_out]."""
         history = torch.cat([x["history"], next_binary], -1)
         out = {}
         for index, name in enumerate(self.group_names):
             if name == BINARY_GROUP:
                 continue
-            for var, pred in self._run(index, history, x, extra).items():
+            for var, pred in self._run(index, history, x, additions).items():
                 if self.encoders[index].kind == "cnf":
                     pred["params"] = cnf.anchor(cnf.parse(pred["raw"]), x["anchor"][..., self.continuous_names.index(var)])
                     pred["mu"] = pred["params"]["loc"]
@@ -307,19 +307,19 @@ class GroupedModel(nn.Module):
         return torch.cat([outcomes[:, 1:, :], outcomes[:, -1:, :]], 1)
 
     def forward(self, history: dict[str, torch.Tensor], *, teacher_forcing: bool = True,
-                extra: Extra | None = None) -> dict:
+                additions: Additions | None = None) -> dict:
         """All positions. With teacher forcing the continuous encoders see the
         recorded next-hour binaries, otherwise the predicted probabilities.
         `bin_probs` is the softmax over a zero logit and the logit."""
         x = self.inputs(history)
-        logits = self.binary_logits(x, extra)
+        logits = self.binary_logits(x, additions)
         next_binary = self.next_binary_factual(x) if teacher_forcing else torch.sigmoid(logits)
-        out = self._collect(self.continuous_outputs(x, next_binary, extra), logits)
+        out = self._collect(self.continuous_outputs(x, next_binary, additions), logits)
         out["bin_probs"] = torch.softmax(torch.stack([torch.zeros_like(logits), logits], -1), -1)[..., 1]
         return out
 
     def next_outputs(self, x: dict, logits: torch.Tensor, next_binary: torch.Tensor,
-                     lengths: torch.Tensor | None = None, extra: Extra | None = None) -> dict:
+                     lengths: torch.Tensor | None = None, additions: Additions | None = None) -> dict:
         """Outputs at the last valid row of each history, each with a time axis of one.
 
         `x` comes from `inputs` and `logits` from `binary_logits`, so the
@@ -330,7 +330,7 @@ class GroupedModel(nn.Module):
         """
         if next_binary.shape[-1] != len(self.binary_outputs):
             raise ValueError(f"next_binary needs {len(self.binary_outputs)} outcome columns, got {next_binary.shape[-1]}")
-        out = self._collect(self.continuous_outputs(x, next_binary, extra), logits)
+        out = self._collect(self.continuous_outputs(x, next_binary, additions), logits)
         out["bin_probs"] = torch.sigmoid(logits)
         b, t, _ = logits.shape
         last = (torch.full((b,), t - 1, device=logits.device, dtype=torch.long) if lengths is None
