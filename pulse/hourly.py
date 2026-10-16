@@ -78,7 +78,9 @@ DERIVED_NAMES = {name for name, _, _ in DERIVED}
 # order of rows with equal sort keys unspecified, and hourly float64 sums
 # and means depend on the order of their terms, so every table is put in
 # one total order over the columns the binning reads. Rows equal in all of
-# these columns are interchangeable.
+# these columns are interchangeable. Measurements are averaged per variable
+# and hour, so `variable` must stay the first key: it keeps each variable's
+# rows together in time order.
 ROW_ORDER = {
     "measurements": ("variable", "charttime", "itemid", "valuenum"),
     "inputevents": ("starttime", "endtime", "itemid", "label", "amount", "amountuom", "rate", "rateuom"),
