@@ -35,8 +35,19 @@ HOME_PATH = re.compile(r"/(Users|home|scratch|private/var|private/tmp)/|[A-Za-z]
 EIGHT_DIGITS = re.compile(r"(?<![\w.])\d{8}(?![\w.])")
 SHORT_HASH = re.compile(r"(?<![\w-])[0-9a-f]{7,40}(?![\w-])")
 WORD = re.compile(r"[a-z0-9_]+")
+# Tracked files are source, SQL, documentation and configuration; digests
+# of reference tensors are JSON under tests/fixtures. Anything else, above
+# all a tensor or table file (.pt, .pkl, .npz, .parquet, .csv), could carry
+# patient data and is refused.
+SOURCE_SUFFIXES = {".py", ".sql", ".md", ".toml"}
+SOURCE_NAMES = {".gitignore", "LICENSE", "LICENSE-mimic-code"}
+FIXTURES = ROOT / "tests" / "fixtures"
 OPEN_MARKERS = ("AUTHOR DECISION PENDING", "[label to confirm]")
-UNTRACKED = {".git", "__pycache__", ".pytest_cache", "runs", "cache"}
+# Folders a reader's own runs create in an unpacked release: the outputs of
+# the README's commands and tool caches. Operating-system metadata files are
+# ignored as well.
+UNTRACKED = {".git", "__pycache__", ".pytest_cache", "runs", "cache", "tables"}
+OS_METADATA = {".DS_Store", "Thumbs.db", "desktop.ini"}
 
 
 def word_digest(word: str) -> str:
@@ -64,13 +75,52 @@ def git(*args: str) -> str | None:
         return None
 
 
+def _shipped(path: Path) -> bool:
+    """Whether a file of an unpacked release came with it, judged by its place and name."""
+    parts = path.relative_to(ROOT).parts
+    if UNTRACKED & set(parts) or path.parent.name.endswith(".egg-info"):
+        return False
+    if path.name in OS_METADATA or path.name.startswith("._"):
+        return False
+    # A virtual environment inside the release is marked by its pyvenv.cfg.
+    return not any((ROOT.joinpath(*parts[:i]) / "pyvenv.cfg").exists() for i in range(1, len(parts)))
+
+
 def repository_files() -> list[Path]:
-    """Tracked files in a git checkout; otherwise every file of an unpacked release."""
+    """Tracked files in a git checkout; otherwise the files an unpacked release shipped.
+
+    Without git, the walk skips the outputs of the README's commands
+    (`runs/`, `cache/`, `tables/`), tool caches, virtual environments and
+    operating-system metadata; anything else a reader adds is scanned, so
+    the release check is meant for a fresh unpack.
+    """
     listing = git("ls-files", "-z")
     if listing is not None:
         return [ROOT / name for name in listing.split("\0") if name]
-    return [p for p in ROOT.rglob("*") if p.is_file()
-            and not UNTRACKED & set(p.relative_to(ROOT).parts) and not p.parent.name.endswith(".egg-info")]
+    return [p for p in ROOT.rglob("*") if p.is_file() and _shipped(p)]
+
+
+def is_allowed_file(path: Path) -> bool:
+    if FIXTURES in path.parents:
+        return path.suffix == ".json"
+    return path.suffix in SOURCE_SUFFIXES or path.name in SOURCE_NAMES
+
+
+def test_file_kind_detector():
+    assert is_allowed_file(ROOT / "pulse" / "data.py") and is_allowed_file(FIXTURES / "any" / "x.json")
+    assert not any(is_allowed_file(ROOT / name) for name in ("cache.pt", "cohort.pkl", "x.npz", "x.parquet",
+                                                             "x.csv", "results.json"))
+    assert not is_allowed_file(FIXTURES / "any" / "case.pt")
+
+
+def test_release_walk_skips_reader_outputs():
+    assert _shipped(ROOT / "pulse" / "data.py")
+    assert not any(_shipped(ROOT / name) for name in ("tables/path_count.json", "runs/x/case_0000.pt",
+                                                      ".DS_Store", "pulse/._data.py"))
+
+
+def test_no_data_files_are_tracked():
+    assert not [str(p.relative_to(ROOT)) for p in repository_files() if not is_allowed_file(p)]
 
 
 def test_detector():
