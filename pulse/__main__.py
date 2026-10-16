@@ -18,10 +18,11 @@ DSN = "dbname=mimiciv host=localhost user=postgres"
 CACHE = Path("cache/sepsis.pt")
 CHECKPOINTS = Path("runs/checkpoints")
 ROLLOUTS = Path("runs/rollouts")
-ORIGINS = (2, 6)
 
 
 def _parser() -> argparse.ArgumentParser:
+    from pulse.data import ORIGINS
+
     from_defaults = argparse.ArgumentDefaultsHelpFormatter
     parser = argparse.ArgumentParser(prog="python -m pulse", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)

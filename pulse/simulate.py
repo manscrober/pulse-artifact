@@ -18,7 +18,7 @@ times per patient. Each hour:
    changed.
 
 The forecast origin `k` is the paper's: the first generated hour is hour
-`k` (one-based), so the last recorded row is `k - 2`.
+`k` (one-based), so the last recorded row is `data.last_recorded_row(k)`.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ import torch
 
 from pulse import cnf
 from pulse import variables as V
-from pulse.data import Part, case_path, save_case
+from pulse.data import Part, case_path, last_recorded_row, save_case
 from pulse.feedback import FeedbackPULSE, RolloutFeedback
 from pulse.model import Policy
 
@@ -108,13 +108,6 @@ def sobol_table(paths: int, device=None) -> torch.Tensor:
     steps, k = 24, len(V.BINARY)
     engine = torch.quasirandom.SobolEngine(steps * k, scramble=True, seed=SOBOL_SEED)
     return engine.draw(paths).reshape(paths, steps, k).to(device)
-
-
-def origin_step(k: int) -> int:
-    """Last recorded row for forecast origin `k`."""
-    if k not in (2, 6):
-        raise ValueError("forecast origins are 2 and 6")
-    return k - 2
 
 
 def _gap(observed: torch.Tensor, hours_until: torch.Tensor) -> torch.Tensor:
@@ -333,6 +326,6 @@ def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int,
             continue
         torch.manual_seed(SEED + 1000 * k + first)
         batch = {key: value[first:ids[-1] + 1] for key, value in test.items()}
-        cont, binary = rollout(pulse, policy, arm, batch, origin_step(k), paths)
+        cont, binary = rollout(pulse, policy, arm, batch, last_recorded_row(k), paths)
         for offset, i in enumerate(ids):
             save_case(out, i, cont[offset], binary[offset])

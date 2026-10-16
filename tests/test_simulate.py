@@ -3,6 +3,7 @@ import json
 import pytest
 import torch
 
+from pulse import data as D
 from pulse import feedback as F
 from pulse import model as M
 from pulse import simulate as S
@@ -46,7 +47,7 @@ def test_generator_after_each_call(expected, arm):
         for first in range(0, 3, PER_CALL):
             torch.manual_seed(S.SEED + 1000 * k + first)
             S.rollout(pulse, policy, S.ARMS[arm], {key: v[first:first + PER_CALL] for key, v in test.items()},
-                      S.origin_step(k), PATHS)
+                      D.last_recorded_row(k), PATHS)
             expected(f"{arm}.k{k}.first{first}.after", torch.rand(2))
 
 
@@ -146,7 +147,7 @@ def test_skipped_appends_against_reference(expected, arm, nothing_changes, monke
     monkeypatch.setattr(M.GroupedModel, "inputs", spy)
     test = part(seed=5, n=3)
     for k in (6, 2):
-        start = S.origin_step(k)
+        start = D.last_recorded_row(k)
         torch.manual_seed(S.SEED + 1000 * k)
         cont, binary = S.rollout(pulse, policy, S.ARMS[arm], test, start, PATHS)
         for i in range(3):

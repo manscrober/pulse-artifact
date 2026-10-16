@@ -80,6 +80,24 @@ def load_case(directory: Path, case: int) -> dict:
     return payload
 
 
+# Forecast origins of the paper. At origin k the first forecast hour is hour
+# k, counted from one, so rows 0 to k - 2 are recorded and row k - 1 is the
+# first forecast row.
+ORIGINS = (2, 6)
+
+
+def last_recorded_row(k: int) -> int:
+    """The last recorded row for forecast origin `k`; the rollout starts after it."""
+    if k not in ORIGINS:
+        raise ValueError(f"forecast origins are {ORIGINS}")
+    return k - 2
+
+
+def first_forecast_row(k: int) -> int:
+    """The first row that is forecast, and scored, for forecast origin `k`."""
+    return last_recorded_row(k) + 1
+
+
 # Subjects per split in the published cohort (strict first stay per subject).
 SPLIT = {"train": 7147, "val": 893, "test": 894}
 SPLIT_SEED = 42

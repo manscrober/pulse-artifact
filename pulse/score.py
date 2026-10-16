@@ -94,12 +94,12 @@ def fill_paths(continuous: torch.Tensor, binary: torch.Tensor, mean: torch.Tenso
 def collect(arms: dict[str, tuple[Path, int | None]], cache: dict, test_rows: np.ndarray, mean: torch.Tensor,
             origin: int) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray], list[int]]:
     """Targets [n, H, V], masks and filled paths [n, P, H, V] from the origin's first forecast hour on."""
-    first = origin - 1
+    first = data.first_forecast_row(origin)
     truth, masks, cases = [], [], []
     samples = {label: [] for label in arms}
     for case, row in enumerate(test_rows):
         death = _first(cache["binary"][row][:, V.DEATH])
-        if death is not None and death <= origin - 2:
+        if death is not None and death <= data.last_recorded_row(origin):
             continue
         directories = {label: Path(directory) / f"k{origin}" for label, (directory, _) in arms.items()}
         if not all(data.case_path(d, case).exists() for d in directories.values()):
@@ -158,7 +158,7 @@ def estimates(stats: dict[str, np.ndarray], weights: np.ndarray, size: int, arm:
     return np.column_stack((vector, scores))
 
 
-def score(arms: dict[str, tuple[Path, int | None]], cache: dict, protocol: Protocol, origins=(2, 6),
+def score(arms: dict[str, tuple[Path, int | None]], cache: dict, protocol: Protocol, origins=data.ORIGINS,
           resamples: int = 2000, seed: int = 20261006) -> dict:
     """Score arms {label: (directory, first M paths or None)}; the first arm is the reference.
 
