@@ -145,6 +145,12 @@ def rollout(args) -> None:
     unknown = [a for a in args.arms if a not in S.ARMS]
     if unknown:
         raise SystemExit(f"unknown arms {unknown}; choose from {list(S.ARMS)}")
+    # Every file the arms need is checked before the first arm starts, so a
+    # missing checkpoint does not stop a long run halfway.
+    needed = ["protocol.json", "policy.pt"] + sorted({f"{S.ARMS[a].weights}.pt" for a in args.arms})
+    missing = [str(args.checkpoints / name) for name in needed if not (args.checkpoints / name).is_file()]
+    if missing:
+        raise SystemExit("missing checkpoint files: " + ", ".join(missing))
     prepared = _prepare(args.cache, args.checkpoints / "protocol.json")
     protocol = prepared.protocol
     test = {key: value.to(args.device) for key, value in prepared.test.items()}

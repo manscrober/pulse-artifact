@@ -29,8 +29,21 @@ def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp
         cli.main(["train", "--phases", "unknown"])
 
 
+def test_rollout_names_missing_checkpoints_before_starting(monkeypatch, tmp_path):
+    started = []
+    monkeypatch.setattr(cli, "_prepare", lambda cache, protocol: started.append(cache))
+    for name in ("protocol.json", "policy.pt", "sample.pt"):
+        (tmp_path / name).write_text("")
+    with pytest.raises(SystemExit) as refused:
+        cli.main(["rollout", "--checkpoints", str(tmp_path), "--arms", "sample", "distribution", "no_sobol"])
+    assert str(refused.value) == f"missing checkpoint files: {tmp_path / 'distribution.pt'}" and not started
+
+
 def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
     calls = []
+    for name in ("protocol.json", "policy.pt", "sample.pt", "quantile_only.pt"):
+        (tmp_path / "checkpoints" / name).parent.mkdir(exist_ok=True)
+        (tmp_path / "checkpoints" / name).write_text("")
     monkeypatch.setattr(cli, "_prepare", lambda cache, protocol: type("P", (), {
         "test": {"continuous": __import__("torch").zeros(3, 24, 37)}, "protocol": "protocol"})())
     monkeypatch.setattr(cli, "_load_policy", lambda directory, protocol: __import__("torch").nn.Linear(1, 1))
@@ -51,7 +64,8 @@ def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
     monkeypatch.setattr("pulse.feedback.FeedbackPULSE", Pulse)
     monkeypatch.setattr(S, "evaluate", lambda pulse, policy, arm, test, k, paths, out, per_call, provenance:
                         calls.append((pulse.loaded, arm, k, paths, out, per_call, provenance)))
-    cli.main(["rollout", "--arms", "sample", "quantile_only", "--paths", "4", "--out", str(tmp_path)])
+    cli.main(["rollout", "--checkpoints", str(tmp_path / "checkpoints"), "--arms", "sample", "quantile_only",
+              "--paths", "4", "--out", str(tmp_path)])
     assert [(c[0], c[2], c[4]) for c in calls] == [
         ("sample.pt", 2, tmp_path / "sample" / "k2"), ("sample.pt", 6, tmp_path / "sample" / "k6"),
         ("quantile_only.pt", 2, tmp_path / "quantile_only" / "k2"),
