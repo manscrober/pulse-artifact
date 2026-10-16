@@ -5,8 +5,8 @@ The cohort is created by the scripts in `sql/` and stored under the name
 per source table; each stay is binned by `pulse.hourly`, and the cache holds
 the stays sorted by subject, ICU admission time and stay.
 
-The queries are those that built the published cache, including columns
-this module does not read. The order of rows with equal sort keys is
+The queries select only the columns the binning reads, with identifier
+lists bound as parameters. The order of rows with equal sort keys is
 unspecified in SQL, so `pulse.hourly` sorts every table by a total key
 before binning, and the cache depends only on the records. The published
 cache was binned in the order the database returned. The sort reorders
@@ -58,11 +58,11 @@ ITEMS = (
     ("Weight", "chartevents", (224639, 226512)),
 )
 
+# Each query selects the columns the binning reads and the identifiers that
+# group the rows by stay. Joins with icustays, admissions and d_items keep
+# the rows of the published build; identifier lists are bound as arrays.
 STAYS = """
-SELECT i.subject_id, i.hadm_id, i.stay_id, i.intime, i.outtime,
-    EXTRACT(EPOCH FROM (i.outtime - i.intime))/3600 as los_hours,
-    a.admission_type, a.admission_location, a.discharge_location, a.insurance, a.language,
-    a.marital_status, a.race, a.admittime, a.dischtime, a.edregtime, a.edouttime
+SELECT i.subject_id, i.hadm_id, i.stay_id, i.intime, i.outtime
 FROM mimiciv_icu.icustays i
 JOIN mimiciv_hosp.admissions a USING (subject_id, hadm_id)
 JOIN public.cohort c
@@ -71,25 +71,23 @@ WHERE i.subject_id = ANY(%s)
 ORDER BY i.subject_id, i.intime
 """
 PATIENTS = """
-SELECT subject_id, gender, anchor_age, anchor_year, dod
+SELECT subject_id, gender, anchor_age, dod
 FROM mimiciv_hosp.patients
 WHERE subject_id = ANY(%s)
 ORDER BY subject_id
 """
 CHARTEVENTS = """
-SELECT subject_id, hadm_id, stay_id, charttime, storetime, itemid, value, valuenum, valueuom
+SELECT stay_id, charttime, itemid, valuenum
 FROM mimiciv_icu.chartevents
-WHERE stay_id IN ({stays}) AND itemid IN ({items}) AND valuenum IS NOT NULL
+WHERE stay_id = ANY(%s) AND itemid = ANY(%s) AND valuenum IS NOT NULL
 """
 LABEVENTS = """
-SELECT subject_id, hadm_id, charttime, storetime, itemid, value, valuenum, valueuom
+SELECT hadm_id, charttime, itemid, valuenum
 FROM mimiciv_hosp.labevents
-WHERE hadm_id IN ({admissions}) AND itemid IN ({items}) AND valuenum IS NOT NULL
+WHERE hadm_id = ANY(%s) AND itemid = ANY(%s) AND valuenum IS NOT NULL
 """
 INPUTEVENTS = """
-SELECT ie.subject_id, ie.hadm_id, ie.stay_id, ie.starttime, ie.endtime, ie.storetime, ie.itemid,
-    ie.amount, ie.amountuom, ie.rate, ie.rateuom, di.label, di.category,
-    EXTRACT(EPOCH FROM (ie.starttime - i.intime))/3600 as hours_since_icu_admit
+SELECT ie.stay_id, ie.starttime, ie.endtime, ie.itemid, ie.amount, ie.amountuom, ie.rate, ie.rateuom, di.label
 FROM mimiciv_icu.inputevents ie
 JOIN mimiciv_icu.icustays i USING (subject_id, hadm_id, stay_id)
 JOIN mimiciv_icu.d_items di ON ie.itemid = di.itemid
@@ -97,9 +95,7 @@ WHERE ie.stay_id = ANY(%s)
 ORDER BY ie.subject_id, ie.stay_id, ie.starttime
 """
 PROCEDUREEVENTS = """
-SELECT pe.subject_id, pe.hadm_id, pe.stay_id, pe.starttime, pe.endtime, pe.storetime, pe.itemid,
-    pe.value, pe.valueuom, di.label, di.category,
-    EXTRACT(EPOCH FROM (pe.starttime - i.intime))/3600 as hours_since_icu_admit
+SELECT pe.stay_id, pe.starttime, pe.endtime, pe.itemid
 FROM mimiciv_icu.procedureevents pe
 JOIN mimiciv_icu.icustays i USING (subject_id, hadm_id, stay_id)
 JOIN mimiciv_icu.d_items di ON pe.itemid = di.itemid
@@ -107,9 +103,7 @@ WHERE pe.stay_id = ANY(%s)
 ORDER BY pe.subject_id, pe.stay_id, pe.starttime
 """
 OUTPUTEVENTS = """
-SELECT oe.subject_id, oe.hadm_id, oe.stay_id, oe.charttime, oe.storetime, oe.itemid, oe.value,
-    oe.valueuom, di.label, di.category,
-    EXTRACT(EPOCH FROM (oe.charttime - i.intime))/3600 as hours_since_icu_admit
+SELECT oe.stay_id, oe.charttime, oe.itemid, oe.value, oe.valueuom
 FROM mimiciv_icu.outputevents oe
 JOIN mimiciv_icu.icustays i USING (subject_id, hadm_id, stay_id)
 JOIN mimiciv_icu.d_items di ON oe.itemid = di.itemid
@@ -151,22 +145,14 @@ def _measurements(conn, stays: pd.DataFrame) -> pd.DataFrame:
     then in query order; `pulse.hourly` re-sorts them by time before
     binning.
     """
-    # These two queries paste the identifier lists into the text, as the
-    # queries that built the published cache did; the query plan, and with
-    # it the order of rows, can differ between `IN (...)` and `= ANY(%s)`.
-    # The identifiers are integers read from the database.
     frames = []
     for table in ("chartevents", "labevents"):
         items = {item: name for name, source, ids in ITEMS if source == table for item in ids}
         if table == "chartevents":
-            query = CHARTEVENTS.format(stays=",".join(map(str, stays["stay_id"].tolist())),
-                                       items=",".join(map(str, items)))
-            rows = _read(conn, query)
+            rows = _read(conn, CHARTEVENTS, (stays["stay_id"].tolist(), list(items)))
             rows = rows.merge(stays[["stay_id", "intime"]], on="stay_id", how="inner")
         else:
-            query = LABEVENTS.format(admissions=",".join(map(str, stays["hadm_id"].unique().tolist())),
-                                     items=",".join(map(str, items)))
-            rows = _read(conn, query)
+            rows = _read(conn, LABEVENTS, (stays["hadm_id"].unique().tolist(), list(items)))
             rows = rows.merge(stays[["hadm_id", "stay_id", "intime"]], on="hadm_id", how="inner")
         for item, group in rows.groupby("itemid"):
             frames.append(group.assign(variable=items[item]))
