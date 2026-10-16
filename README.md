@@ -179,20 +179,20 @@ the same directory keeps every complete file, and a directory that holds
 rollouts made with other settings or other checkpoint files is refused.
 
 The rollout variants are the keys of `pulse.simulate.ARMS`, used unchanged
-in the command line, directory names and scored rows. The table maps them to
-the labels of the published result files and to the paper.
+in the command line, directory names and scored rows. The table gives the
+settings of each variant and its name in the paper.
 
-| `ARMS` key | weights | two-pass step | descriptor history | descriptors | mean state | Sobol draws | published label | paper |
-|---|---|---|---|---|---|---|---|---|
-| `sample` | sample | no | no | none | no | no | `sampled100` | Sampled history |
-| `sample_twopass` | sample | yes | no | none | no | no | `twopass100` | [label to confirm] |
-| `sample_sobol` | sample | yes | no | none | no | yes | `sampled_sobol100`, `sobol100` | [label to confirm] |
-| `distribution` | distribution | yes | yes | quantiles and probabilities | yes | yes | `distribution100`; `dist1` to `dist32` with fewer paths | PULSE distribution history |
-| `no_sobol` | distribution | yes | yes | quantiles and probabilities | yes | no | `no_sobol100`; `no_sobol` with 16 paths | [label to confirm] |
-| `sampled_state` | distribution | yes | yes | quantiles and probabilities | no | yes | `sampled_values100`; `values1` to `values32` with fewer paths | [label to confirm] |
-| `mean_only` | sample | yes | yes | none | yes | no | `mean_only100` | [label to confirm] |
-| `quantile_only` | quantile_only | yes | yes | quantiles | no | no | | [label to confirm] |
-| `probability_only` | probability_only | yes | yes | probabilities | no | no | | [label to confirm] |
+| `ARMS` key | weights | two-pass step | descriptor history | descriptors | mean state | Sobol draws | paper |
+|---|---|---|---|---|---|---|---|
+| `sample` | sample | no | no | none | no | no | Sampled history |
+| `sample_twopass` | sample | yes | no | none | no | no | [label to confirm] |
+| `sample_sobol` | sample | yes | no | none | no | yes | [label to confirm] |
+| `distribution` | distribution | yes | yes | quantiles and probabilities | yes | yes | PULSE distribution history |
+| `no_sobol` | distribution | yes | yes | quantiles and probabilities | yes | no | [label to confirm] |
+| `sampled_state` | distribution | yes | yes | quantiles and probabilities | no | yes | [label to confirm] |
+| `mean_only` | sample | yes | yes | none | yes | no | [label to confirm] |
+| `quantile_only` | quantile_only | yes | yes | quantiles | no | no | [label to confirm] |
+| `probability_only` | probability_only | yes | yes | probabilities | no | no | [label to confirm] |
 
 In the two-pass step the binary outcomes of the next hour are drawn first
 and the continuous laws are conditioned on that draw; the single-pass
@@ -230,13 +230,11 @@ origins.
 Table 1, 100 paths per patient against sampled history.
 **[AUTHOR DECISION PENDING: the arm set of Table 1. Two published result
 sets are candidates. The published 100-path table, which the scorer
-reproduces bit for bit, holds three arms (`sampled100`, `distribution100`,
-`sampled_values100`, here `sample`, `distribution`, `sampled_state`). The
-published matched comparison against 100-path sampled history holds six
-(`sampled100`, `twopass100`, `sobol100`, `distribution100`,
-`sampled_values100`, `mean_only100`, here `sample`, `sample_twopass`,
-`sample_sobol`, `distribution`, `sampled_state`, `mean_only`). Replace this
-bracket with the chosen set before release.]**
+reproduces bit for bit, holds three arms: `sample`, `distribution` and
+`sampled_state`. The published matched comparison against 100-path
+sampled history holds six: `sample`, `sample_twopass`, `sample_sobol`,
+`distribution`, `sampled_state` and `mean_only`. Replace this bracket
+with the chosen set, and add its expected numbers, before release.]**
 The command takes the arms after the reference `sample`:
 
 ```
@@ -256,12 +254,84 @@ python -m pulse score --arms sample \
     --out tables/path_count.json
 ```
 
+Expected numbers come from the published path-count table, which the
+scorer reproduces bit for bit from the published rollouts when it is run
+with the arm list above (a target point counts only if every listed arm
+has finite paths there, so another arm list can change the scores). Each
+entry is the estimate over the test patients with its 95% bootstrap
+interval, on the panel of the 35 continuous variables that are not
+ordinal; the output also holds the panel of all 37. Targets and paths are
+in units of each variable's training standard deviation. CRPS and WIS are
+averaged over the recorded points of each variable and then over the
+variables, and lower is better. Coverage is the fraction of recorded
+targets inside the central 90% interval of the paths, against a nominal
+0.90; with one or two paths that interval is a single value or the range
+of two, so coverage is low by construction. Coverage need not rise with
+the number of paths: the published rows give `distribution:32` lower
+coverage than `distribution:16` at both origins, and the table keeps
+them as published.
+
+The RMSE column is a distance between vectors, computed per patient and
+then averaged over patients. For patient $i$, let $H_i$ be the forecast
+hours at which at least one panel variable is recorded, $R_{it}$ the
+panel variables recorded at hour $t$, $y_{itv}$ the target, $\bar x_{itv}$
+the mean over paths and $s_v$ the training standard deviation of variable
+$v$. Then
+
+$$
+\mathrm{RMSE}_i = \sqrt{\frac{1}{|H_i|} \sum_{t \in H_i} \sum_{v \in R_{it}}
+\left( \frac{\bar x_{itv} - y_{itv}}{s_v} \right)^2 } .
+$$
+
+Each hour contributes the squared Euclidean norm of the standardised
+errors over up to 35 variables, so values near 4 are not per-variable
+errors.
+Rollouts made on another device are expected to agree with these numbers
+within Monte Carlo variability (level (c) under "Reproduction and its
+limits").
+
+Origin hour 2:
+
+| arm | CRPS | WIS | 90% coverage | RMSE of path mean |
+|---|---|---|---|---|
+| `sample` | 0.494 (0.486, 0.503) | 0.495 (0.486, 0.503) | 0.837 (0.832, 0.841) | 4.10 (4.02, 4.18) |
+| `distribution:1` | 0.805 (0.771, 0.860) | 0.805 (0.771, 0.860) | 0.044 (0.042, 0.045) | 5.16 (4.97, 5.40) |
+| `distribution:2` | 0.663 (0.649, 0.681) | 0.663 (0.649, 0.681) | 0.276 (0.272, 0.280) | 4.83 (4.70, 4.98) |
+| `distribution:4` | 0.578 (0.568, 0.588) | 0.578 (0.568, 0.588) | 0.456 (0.450, 0.462) | 4.38 (4.28, 4.48) |
+| `distribution:8` | 0.544 (0.535, 0.554) | 0.544 (0.535, 0.554) | 0.588 (0.581, 0.594) | 4.20 (4.11, 4.28) |
+| `distribution:16` | 0.524 (0.515, 0.533) | 0.524 (0.515, 0.534) | 0.707 (0.701, 0.712) | 4.11 (4.03, 4.19) |
+| `distribution:32` | 0.514 (0.505, 0.523) | 0.514 (0.505, 0.523) | 0.688 (0.681, 0.694) | 4.02 (3.94, 4.10) |
+| `sampled_state:1` | 0.931 (0.895, 0.986) | 0.931 (0.895, 0.986) | 0.052 (0.051, 0.054) | 6.14 (5.95, 6.38) |
+| `sampled_state:2` | 0.740 (0.722, 0.760) | 0.740 (0.722, 0.760) | 0.349 (0.344, 0.355) | 5.68 (5.50, 5.87) |
+| `sampled_state:4` | 0.603 (0.593, 0.613) | 0.603 (0.593, 0.613) | 0.577 (0.570, 0.583) | 4.79 (4.69, 4.91) |
+| `sampled_state:8` | 0.544 (0.536, 0.553) | 0.545 (0.536, 0.554) | 0.726 (0.720, 0.732) | 4.36 (4.27, 4.44) |
+| `sampled_state:16` | 0.517 (0.509, 0.526) | 0.518 (0.509, 0.526) | 0.829 (0.824, 0.834) | 4.21 (4.13, 4.30) |
+| `sampled_state:32` | 0.501 (0.493, 0.510) | 0.502 (0.494, 0.511) | 0.823 (0.818, 0.829) | 4.04 (3.97, 4.13) |
+
+Origin hour 6:
+
+| arm | CRPS | WIS | 90% coverage | RMSE of path mean |
+|---|---|---|---|---|
+| `sample` | 0.415 (0.407, 0.424) | 0.415 (0.407, 0.424) | 0.801 (0.794, 0.807) | 3.58 (3.49, 3.67) |
+| `distribution:1` | 0.657 (0.629, 0.705) | 0.657 (0.629, 0.705) | 0.064 (0.062, 0.066) | 4.42 (4.25, 4.64) |
+| `distribution:2` | 0.550 (0.527, 0.585) | 0.550 (0.527, 0.585) | 0.281 (0.276, 0.286) | 4.11 (3.97, 4.29) |
+| `distribution:4` | 0.476 (0.465, 0.488) | 0.476 (0.466, 0.489) | 0.456 (0.450, 0.463) | 3.77 (3.67, 3.89) |
+| `distribution:8` | 0.450 (0.441, 0.460) | 0.450 (0.442, 0.460) | 0.586 (0.580, 0.593) | 3.64 (3.56, 3.72) |
+| `distribution:16` | 0.437 (0.428, 0.446) | 0.437 (0.429, 0.446) | 0.706 (0.699, 0.713) | 3.57 (3.49, 3.66) |
+| `distribution:32` | 0.428 (0.420, 0.437) | 0.428 (0.420, 0.437) | 0.685 (0.678, 0.692) | 3.50 (3.42, 3.58) |
+| `sampled_state:1` | 0.761 (0.731, 0.809) | 0.761 (0.731, 0.809) | 0.071 (0.068, 0.073) | 5.28 (5.10, 5.49) |
+| `sampled_state:2` | 0.601 (0.578, 0.637) | 0.601 (0.578, 0.637) | 0.347 (0.342, 0.352) | 4.65 (4.49, 4.84) |
+| `sampled_state:4` | 0.495 (0.483, 0.508) | 0.495 (0.484, 0.508) | 0.564 (0.557, 0.570) | 4.03 (3.93, 4.14) |
+| `sampled_state:8` | 0.452 (0.443, 0.461) | 0.452 (0.443, 0.461) | 0.707 (0.700, 0.713) | 3.75 (3.67, 3.84) |
+| `sampled_state:16` | 0.432 (0.424, 0.441) | 0.433 (0.424, 0.441) | 0.809 (0.802, 0.815) | 3.63 (3.54, 3.72) |
+| `sampled_state:32` | 0.419 (0.412, 0.428) | 0.420 (0.412, 0.428) | 0.797 (0.791, 0.803) | 3.51 (3.43, 3.59) |
+
 Table 3, components of the combined method. The commands below use 16
 paths per patient, the CPU and the default group of 8 patients per call.
 **[AUTHOR DECISION PENDING: Table 3 run settings, namely the device, the
 number of patients per rollout call and the number of paths. Replace this
-bracket and the commands below with the settings of the final runs before
-release.]**
+bracket and the commands below with the settings of the final runs, and
+add their expected numbers, before release.]**
 
 ```
 python -m pulse train --phases quantile_only probability_only     # reads runs/checkpoints/policy.pt
@@ -273,23 +343,30 @@ python -m pulse score --rollouts runs/rollouts16 \
 
 ## Runtimes
 
-All times were measured on an Apple silicon laptop CPU with one thread.
+The laptop times were measured on an Apple M4 Max CPU with one thread.
 `build-cache` was timed over two rebuilds of the whole cohort, and `score`
 over both published path-count tables together (16 arm labels, including
-reading the case files). The test suite takes about a minute on an idle
-machine.
+reading the case files). The second column is for an NVIDIA A30 GPU.
+Cache building, scoring and the tests run on the CPU only.
 
-| step | time |
-|---|---|
-| `build-cache`, whole cohort | 12 to 15 minutes |
-| `score`, both published path-count tables | about 4 minutes |
-| test suite | about 1 minute |
+| step | Apple M4 Max CPU, one thread | NVIDIA A30 |
+|---|---|---|
+| `build-cache`, whole cohort | 12 to 15 minutes | CPU only |
+| `train`, one epoch of each phase | pending | pending |
+| `rollout`, one call of 8 patients, 100 paths | per arm, below | pending |
+| `score`, both published path-count tables | about 4 minutes | CPU only |
+| test suite | about 1 minute | CPU only |
 
-Rollout times per arm were measured on the artifact side of the bitwise
-comparison runs: one call of 8 real test patients with 100 paths each, at
-origin 6 and at origin 2, timed around `simulate.rollout` alone (weights
-already loaded). The last column scales the sum to the 112 calls of 8 that
-cover the 894 test patients.
+**[AUTHOR DECISION PENDING: the cells marked "pending" were not measured
+for this release. Measure one training epoch of each phase on both
+devices and one rollout call per arm on the A30, or state that the times
+are not reported, and replace this bracket before release.]**
+
+Rollout times per arm on the M4 Max were measured on the artifact side of
+the bitwise comparison runs: one call of 8 real test patients with 100
+paths each, at origin 6 and at origin 2, timed around `simulate.rollout`
+alone (weights already loaded). The last column scales the sum to the 112
+calls of 8 that cover the 894 test patients.
 
 | arm | seconds, origin 6 + origin 2 | whole test set, hours |
 |---|---|---|
@@ -302,8 +379,6 @@ cover the 894 test patients.
 | `sampled_state` | 61 + 65 | 3.9 |
 | `no_sobol` | 59 + 84 | 4.4 |
 | `distribution` | 80 + 83 | 5.1 |
-
-CPU training times have not been measured.
 
 ## Reproduction and its limits
 
