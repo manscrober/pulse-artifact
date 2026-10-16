@@ -256,7 +256,8 @@ class RolloutFeedback:
         timed = ("continuous", "binary", "time_hours", "continuous_mask", "padding_mask")
         for j in range(1, length):
             part = {k: (v[:, :j] if k in timed and v is not None else v) for k, v in history.items()}
-            out = core.predict_next(part, outcomes[:, 1:j + 1])
+            x = core.inputs(part)
+            out = core.next_outputs(x, core.binary_logits(x), outcomes[:, 1:j + 1])
             dq, dm, dp, dpm = self.pulse.distribution_tensors(out, (len(outcomes), 1, len(V.CONTINUOUS)))
             # The policy's probability at row j - 1, from its softmax over the prefix.
             dp[:, 0, V.VASOPRESSOR] = po["binary_treatment_probs"][:, j - 1, 0]

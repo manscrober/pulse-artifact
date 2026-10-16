@@ -22,6 +22,11 @@ def record(expected, prefix, o):
             expected(f"{prefix}.params{j}.{key}", o["dist_params_list"][j][key])
 
 
+def next_step(model, history, next_binary, lengths):
+    x = model.inputs(history)
+    return model.next_outputs(x, model.binary_logits(x), next_binary, lengths)
+
+
 def test_initial_weights(expected):
     pulse, policy, after_pulse, after_policy = build()
     expected("pulse_after_init", after_pulse)
@@ -50,7 +55,7 @@ def test_outputs(expected):
         padding = torch.arange(24).view(1, -1) >= lengths.view(-1, 1)
         override = (torch.rand(800, 24, 7, generator=g) < 0.3).float()
         big_history = {k: big[k] for k in ("continuous", "binary", "static", "time_hours", "continuous_mask")}
-        record(expected, "big", pulse.predict_next(dict(big_history, padding_mask=padding), override, lengths))
+        record(expected, "big", next_step(pulse, dict(big_history, padding_mask=padding), override, lengths))
         p = policy.treatments(big["continuous"], big["binary"], big["static"], big["time_hours"])
         expected("big_policy.continuous_treatments", p["continuous_treatments"][:, -1])
         expected("big_policy.binary_treatment_logits", p["binary_treatment_logits"][:, -1])
@@ -58,8 +63,8 @@ def test_outputs(expected):
         lengths = torch.tensor([24, 17, 9, 1])
         padding = torch.arange(24).view(1, -1) >= lengths.view(-1, 1)
         override = (torch.rand(4, 24, 8, generator=torch.Generator().manual_seed(3)) < 0.4).float()
-        record(expected, "next", pulse.predict_next(dict(history, padding_mask=padding), override, lengths))
-        record(expected, "next_free", pulse.predict_next(history))
+        override = override[..., pulse.binary_output_indices]
+        record(expected, "next", next_step(pulse, dict(history, padding_mask=padding), override, lengths))
         p = policy.treatments(data["continuous"], data["binary"], data["static"], data["time_hours"])
         for key, value in p.items():
             expected("policy." + key, value)

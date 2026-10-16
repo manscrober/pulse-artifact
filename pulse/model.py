@@ -318,24 +318,18 @@ class GroupedModel(nn.Module):
         out["bin_probs"] = torch.softmax(torch.stack([torch.zeros_like(logits), logits], -1), -1)[..., 1]
         return out
 
-    def predict_next(self, history: dict[str, torch.Tensor], next_binary: torch.Tensor | None = None,
+    def next_outputs(self, x: dict, logits: torch.Tensor, next_binary: torch.Tensor,
                      lengths: torch.Tensor | None = None, extra: Extra | None = None) -> dict:
         """Outputs at the last valid row of each history, each with a time axis of one.
 
-        `next_binary` [B, T, K or K_out] replaces the predicted next-hour
-        binaries; `lengths` [B] gives the valid rows of padded histories.
-        `bin_probs` is the sigmoid of the logit.
+        `x` comes from `inputs` and `logits` from `binary_logits`, so the
+        caller chooses the next-hour binaries from the logits.
+        `next_binary` [B, T, K_out] holds those binaries for every row;
+        `lengths` [B] gives the valid rows of padded histories, all rows
+        when omitted. `bin_probs` is the sigmoid of the logit.
         """
-        x = self.inputs(history)
-        return self.next_outputs(x, self.binary_logits(x, extra), next_binary, lengths, extra)
-
-    def next_outputs(self, x: dict, logits: torch.Tensor, next_binary: torch.Tensor | None,
-                     lengths: torch.Tensor | None, extra: Extra | None = None) -> dict:
-        """Second half of `predict_next`, for callers that choose the next-hour binaries from the logits."""
-        if next_binary is None:
-            next_binary = torch.sigmoid(logits)
-        elif next_binary.shape[-1] == len(self.binary_names):
-            next_binary = next_binary[..., self.binary_output_indices]
+        if next_binary.shape[-1] != len(self.binary_outputs):
+            raise ValueError(f"next_binary needs {len(self.binary_outputs)} outcome columns, got {next_binary.shape[-1]}")
         out = self._collect(self.continuous_outputs(x, next_binary, extra), logits)
         out["bin_probs"] = torch.sigmoid(logits)
         b, t, _ = logits.shape
