@@ -54,6 +54,12 @@ class Arm:
     descriptors the model reads, and `mean_state` replaces the sampled
     values in the history by predictive means. `sobol` draws binary
     branches from a shared Sobol table.
+
+    Feedback arms always use the descriptor settings of the published
+    runs: generated rows carry the laws they were drawn from, and rows
+    before the origin carry teacher-forced laws (see `RolloutFeedback`).
+    The research driver's own defaults were point descriptors and no
+    prefix descriptors; those settings are not provided here.
     """
 
     weights: str
@@ -315,6 +321,9 @@ def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int,
     settings.write_text(json.dumps(record, indent=1) + "\n")
     for first in range(0, n, per_call):
         ids = list(range(first, min(first + per_call, n)))
+        # A group is rerun whole unless all its case files exist. Each group
+        # is seeded on its own, so rerunning a partly written group rewrites
+        # its existing files with identical contents.
         if all(case_path(out, i).exists() for i in ids):
             continue
         torch.manual_seed(SEED + 1000 * k + first)

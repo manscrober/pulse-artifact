@@ -257,7 +257,15 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     refused before training. Returns the model, the validation history,
     the best validation loss and whether training stopped early. The
     returned policy is frozen and in evaluation mode, ready for the PULSE
-    phases.
+    phases. Only the best epoch's weights are written; there is no
+    last-epoch checkpoint.
+
+    The published weights were trained on a CUDA device. Training on the
+    CPU or on Apple MPS follows the same procedure, data order and
+    stopping rule, but floating-point results differ between devices, so
+    it yields different weights.
+    The tests check the procedure bitwise against the reference
+    implementation on the CPU.
     """
     if phase not in PHASES:
         raise ValueError(f"unknown phase {phase}")
