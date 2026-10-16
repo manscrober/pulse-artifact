@@ -32,8 +32,12 @@ def test_build_train_roll_out_and_score(monkeypatch, tmp_path):
     main(["train", "--cache", str(cache), "--out", str(checkpoints), "--phases", "policy", "sample",
           "distribution", "--epochs", "1", "--batch", "4", "--micro", "2"])
     assert sorted(p.name for p in checkpoints.iterdir()) == ["distribution.pt", "policy.pt", "protocol.json", "sample.pt"]
-    main(["rollout", "--cache", str(cache), "--checkpoints", str(checkpoints), "--arms", "sample", "distribution",
-          "--paths", "2", "--per-call", "2", "--out", str(rollouts)])
+    rollout = ["rollout", "--cache", str(cache), "--checkpoints", str(checkpoints), "--arms", "sample",
+               "distribution", "--paths", "2", "--per-call", "2", "--out", str(rollouts)]
+    main(rollout)
+    written = {path: path.read_bytes() for path in rollouts.rglob("*") if path.is_file()}
+    main(rollout)  # the same command into the same folder keeps every file as it was
+    assert {path: path.read_bytes() for path in rollouts.rglob("*") if path.is_file()} == written
     for arm in ("sample", "distribution"):
         for origin in (2, 6):
             directory = rollouts / arm / f"k{origin}"
