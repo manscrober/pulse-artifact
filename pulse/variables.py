@@ -138,7 +138,7 @@ def bounds() -> tuple[torch.Tensor, torch.Tensor]:
     return low, high
 
 
-def update_derived(cont: torch.Tensor, step: int, baseline: torch.Tensor | None = None) -> torch.Tensor:
+def update_derived(cont: torch.Tensor, step: int, baseline: torch.Tensor) -> torch.Tensor:
     """Recompute derived variables of hour `step` in place.
 
     `cont` is [N, T, V] in physical units and `baseline` is [N, V], the first
@@ -157,11 +157,10 @@ def update_derived(cont: torch.Tensor, step: int, baseline: torch.Tensor | None 
         cont[:, 0, min_mbp] = cont[:, 0, mbp]
     else:
         cont[:, step, min_mbp] = torch.min(cont[:, step - 1, min_mbp], cont[:, step, mbp])
-    if baseline is not None:
-        if step == 0:
-            cont[:, 0, min_mbp_base] = cont[:, 0, mbp] - baseline[:, mbp]
-        else:
-            cont[:, step, min_mbp_base] = torch.min(cont[:, step - 1, min_mbp_base], cont[:, step, mbp] - baseline[:, mbp])
+    if step == 0:
+        cont[:, 0, min_mbp_base] = cont[:, 0, mbp] - baseline[:, mbp]
+    else:
+        cont[:, step, min_mbp_base] = torch.min(cont[:, step - 1, min_mbp_base], cont[:, step, mbp] - baseline[:, mbp])
 
     for source, from_baseline, from_previous in (
         ("SOFA Score", "Change in SOFA Score from Baseline", "Change in SOFA Score from Previous"),
@@ -169,7 +168,7 @@ def update_derived(cont: torch.Tensor, step: int, baseline: torch.Tensor | None 
         ("Weight", None, "Change in Weight"),
     ):
         src = _C[source]
-        if from_baseline is not None and baseline is not None:
+        if from_baseline is not None:
             cont[:, step, _C[from_baseline]] = cont[:, step, src] - baseline[:, src]
         if step > 0:
             cont[:, step, _C[from_previous]] = cont[:, step, src] - cont[:, step - 1, src]
@@ -189,14 +188,11 @@ def forward_fill(cont: torch.Tensor, keep: torch.Tensor, fill: torch.Tensor) -> 
     return filled
 
 
-def zero_invalid_mask(cont: torch.Tensor, mask: torch.Tensor, event: torch.Tensor | None = None) -> torch.Tensor:
-    """Clear the mask [N, T, V] where a zero-invalid variable is zero before an event."""
-    if event is None:
-        event = torch.zeros(mask.shape[:2], dtype=torch.bool, device=mask.device)
+def zero_invalid_mask(cont: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """Clear the mask [N, T, V] where a zero-invalid variable is zero."""
     updated = mask.clone()
     for i in ZERO_INVALID:
-        valid = (cont[:, :, i] != 0) | event
-        updated[:, :, i] = updated[:, :, i] * valid.to(updated.dtype)
+        updated[:, :, i] = updated[:, :, i] * (cont[:, :, i] != 0).to(updated.dtype)
     return updated
 
 
@@ -237,37 +233,26 @@ def event_times(binary: torch.Tensor) -> tuple[list[int], list[int], torch.Tenso
     return death, release, event
 
 
-def fill_after_events(cont: torch.Tensor, death: Sequence[int] | None = None, release: Sequence[int] | None = None,
-                      means: torch.Tensor | None = None) -> torch.Tensor:
+def fill_after_events(cont: torch.Tensor, death: Sequence[int], release: Sequence[int],
+                      means: torch.Tensor) -> torch.Tensor:
     """Fill [N, T, V] from the hour of death or release onwards.
 
     After death a variable takes its lower range bound when that is negative
     and zero otherwise; after release it takes the training mean `means` [V].
-    `death` and `release` hold one hour per row, or a single hour that
-    applies to every row; an hour of T or later means no event. This is the
-    rule of rollouts and evaluation; the cache was filled by a different
-    rule from each stay's own statistics (`pulse.hourly`).
+    `death` and `release` hold one hour per row, as `event_times` returns
+    them; an hour of T or later means no event. This is the rule of rollouts
+    and evaluation; the cache was filled by a different rule from each
+    stay's own statistics (`pulse.hourly`).
     """
     filled = cont.clone()
     n, steps, _ = filled.shape
     device = filled.device
+    if len(death) != n or len(release) != n:
+        raise ValueError(f"expected one death and one release hour per row ({n})")
     hours = torch.arange(steps, device=device).view(1, steps)
-
-    def as_tensor(times):
-        t = torch.as_tensor(times, device=device).reshape(-1)
-        if t.numel() == 1:
-            return t.expand(n)
-        if t.numel() != n:
-            raise ValueError(f"expected one event hour or one per row ({n}), got {t.numel()}")
-        return t
-
-    if death is not None:
-        values = torch.tensor([RANGES[name][0] if RANGES[name][0] < 0 else 0.0 for name in CONTINUOUS],
-                              device=device, dtype=filled.dtype)
-        after = (hours >= as_tensor(death).view(-1, 1)).unsqueeze(-1)
-        filled = torch.where(after, values.view(1, 1, -1), filled)
-    if release is not None and means is not None:
-        means = means.to(device) if torch.is_tensor(means) else torch.tensor(means, device=device, dtype=filled.dtype)
-        after = (hours >= as_tensor(release).view(-1, 1)).unsqueeze(-1)
-        filled = torch.where(after, means.view(1, 1, -1), filled)
-    return filled
+    values = torch.tensor([RANGES[name][0] if RANGES[name][0] < 0 else 0.0 for name in CONTINUOUS],
+                          device=device, dtype=filled.dtype)
+    after = (hours >= torch.tensor(death, device=device).view(-1, 1)).unsqueeze(-1)
+    filled = torch.where(after, values.view(1, 1, -1), filled)
+    after = (hours >= torch.tensor(release, device=device).view(-1, 1)).unsqueeze(-1)
+    return torch.where(after, means.to(device).view(1, 1, -1), filled)

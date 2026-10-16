@@ -30,15 +30,6 @@
     37
    ]
   },
-  "derived_without_baseline": {
-   "dtype": "float32",
-   "sha256": "8af2cd523ef37d28bbd93b6737112ed200d137249fdbef7f9b705cd500310a10",
-   "shape": [
-    8,
-    24,
-    37
-   ]
-  },
   "event": {
    "dtype": "bool",
    "sha256": "ce0d18d04612498116c8229fc6ae590ebd6a8277c72f82786e874c7c5089ba4c",
@@ -47,36 +38,9 @@
     24
    ]
   },
-  "fill_after_death_only": {
-   "dtype": "float32",
-   "sha256": "dac5089dad6ffc2b857f2bd3337fa6c7e58796dbd398072a45f018de9b43d5ba",
-   "shape": [
-    8,
-    24,
-    37
-   ]
-  },
   "fill_after_events": {
    "dtype": "float32",
    "sha256": "8c23a4ea6e78d3aaf74f64be65d0dcceba8d2bc0fa91830ec0aabdb8fb808beb",
-   "shape": [
-    8,
-    24,
-    37
-   ]
-  },
-  "fill_after_scalar_hours": {
-   "dtype": "float32",
-   "sha256": "1b7a6e8857c12d67b659266daf3c01b42aa694418c3cfb0467e524ce93a2fd07",
-   "shape": [
-    8,
-    24,
-    37
-   ]
-  },
-  "fill_after_single_death": {
-   "dtype": "float32",
-   "sha256": "c5554cac1d80d21b09b4674f3443f73861968f769bfc5ee76040765cecd1529c",
    "shape": [
     8,
     24,
@@ -125,15 +89,6 @@
    ]
   },
   "zero_invalid_mask": {
-   "dtype": "float32",
-   "sha256": "2efed1bf08207fcdef744d3138f8ac51fc1e0f85bebf59834a9a1d5bb7c118c2",
-   "shape": [
-    8,
-    24,
-    37
-   ]
-  },
-  "zero_invalid_mask_no_event": {
    "dtype": "float32",
    "sha256": "ca0b5381a554db7e41cf3a3cefad142bee53c99332c7d7d248dac8b087e8e5b5",
    "shape": [

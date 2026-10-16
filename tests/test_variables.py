@@ -25,13 +25,11 @@ def test_bounds(expected):
 
 
 def test_update_derived(expected, data):
-    derived, plain = data["continuous"].clone(), data["continuous"].clone()
+    derived = data["continuous"].clone()
     baseline = derived[:, 0].clone()
     for t in range(derived.shape[1]):
         V.update_derived(derived, t, baseline)
-        V.update_derived(plain, t)
     expected("derived", derived)
-    expected("derived_without_baseline", plain)
 
 
 def test_forward_fill_zero_invalid(expected, data):
@@ -55,10 +53,7 @@ def test_event_times(expected, data):
 
 
 def test_zero_invalid_mask(expected, data):
-    _, _, event = V.event_times(data["binary"])
-    keep = data["keep"].float()
-    expected("zero_invalid_mask", V.zero_invalid_mask(data["continuous"], keep, event))
-    expected("zero_invalid_mask_no_event", V.zero_invalid_mask(data["continuous"], keep))
+    expected("zero_invalid_mask", V.zero_invalid_mask(data["continuous"], data["keep"].float()))
 
 
 def test_forward_fill(expected, data):
@@ -69,15 +64,12 @@ def test_fill_after_events(expected, data):
     death, release, _ = V.event_times(data["binary"])
     filled = V.forward_fill(data["continuous"], data["keep"], data["means"])
     expected("fill_after_events", V.fill_after_events(filled, death, release, data["means"]))
-    expected("fill_after_death_only", V.fill_after_events(filled, death))
-    expected("fill_after_single_death", V.fill_after_events(filled, death[:1]))
-    expected("fill_after_scalar_hours", V.fill_after_events(filled, 5, 9, data["means"]))
 
 
-def test_event_hours_need_one_per_row_or_one_for_all():
+def test_event_hours_need_one_per_row():
     cont = torch.zeros(3, 6, len(V.CONTINUOUS))
     with pytest.raises(ValueError):
-        V.fill_after_events(cont, [2, 4])
+        V.fill_after_events(cont, [2, 4], [6, 6, 6], torch.zeros(len(V.CONTINUOUS)))
 
 
 def test_event_rule():
