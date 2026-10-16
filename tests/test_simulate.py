@@ -6,6 +6,7 @@ import torch
 from pulse import feedback as F
 from pulse import model as M
 from pulse import simulate as S
+from pulse import variables as V
 from pulse.data import load_case
 from synthetic import part, perturb, protocol
 
@@ -73,3 +74,64 @@ def test_rollout_settings_are_recorded_and_checked(tmp_path):
     assert (record["origin"], record["paths"], record["per_call"]) == (6, 1, S.PER_CALL)
     with pytest.raises(ValueError):
         S.evaluate(pulse, policy, S.ARMS["sample"], test, 6, 2, tmp_path)
+
+
+SKIP_ARMS = ["sample", "sample_sobol", "distribution", "mean_only"]
+
+
+@pytest.fixture
+def nothing_changes(monkeypatch):
+    """Nothing is recorded, the bolus is held at zero and the vasopressor is never started.
+
+    With death and release also made improbable (see `quiet_outcomes`),
+    every generated hour after the first then skips the history append, so
+    the history grows by at most one row after the origin. The reference
+    digests come from the same changes applied to the reference
+    implementation.
+    """
+    next_outputs, treatments = M.GroupedModel.next_outputs, M.Policy.treatments
+
+    def quiet_next(self, *args, **kwargs):
+        out = next_outputs(self, *args, **kwargs)
+        out["obs_logits"] = torch.full_like(out["obs_logits"], -30.0)
+        return out
+
+    def quiet_treatments(self, *args, **kwargs):
+        out = dict(treatments(self, *args, **kwargs))
+        out["continuous_treatments"] = torch.zeros_like(out["continuous_treatments"])
+        out["binary_treatment_logits"] = torch.full_like(out["binary_treatment_logits"], -30.0)
+        return out
+
+    monkeypatch.setattr(M.GroupedModel, "next_outputs", quiet_next)
+    monkeypatch.setattr(M.Policy, "treatments", quiet_treatments)
+
+
+def quiet_outcomes(pulse: F.FeedbackPULSE) -> None:
+    """Set the death and release output biases to -30."""
+    heads = pulse.pulse.encoders[pulse.pulse.binary_group].heads
+    names = pulse.pulse.binary_outputs
+    with torch.no_grad():
+        for index in (V.DEATH, V.RELEASE):
+            heads[names.index(V.BINARY[index])].bias.fill_(-30.0)
+
+
+@pytest.mark.parametrize("arm", SKIP_ARMS)
+def test_skipped_appends_against_reference(expected, arm, nothing_changes):
+    pulse, policy = models()
+    quiet_outcomes(pulse)
+    test = part(seed=5, n=3)
+    for k in (6, 2):
+        start = S.origin_step(k)
+        torch.manual_seed(S.SEED + 1000 * k)
+        cont, binary = S.rollout(pulse, policy, S.ARMS[arm], test, start, PATHS)
+        for i in range(3):
+            expected(f"skip.{arm}.k{k}.case{i}.continuous", cont[i])
+            expected(f"skip.{arm}.k{k}.case{i}.binary", binary[i])
+        expected(f"skip.{arm}.k{k}.after", torch.rand(2))
+        # With nothing recorded, an hour joins the history only through an
+        # event or a treatment change; hours without either were skipped.
+        later, earlier = slice(start + 2, None), slice(start + 1, -1)
+        skipped = ((binary[..., later, V.DEATH] < 0.5) & (binary[..., later, V.RELEASE] < 0.5)
+                   & (binary[..., later, V.VASOPRESSOR] == binary[..., earlier, V.VASOPRESSOR])
+                   & (cont[..., later, V.BOLUS] == cont[..., earlier, V.BOLUS]))
+        assert skipped.all(), "a generated hour after the first joined the history"
