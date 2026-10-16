@@ -100,9 +100,10 @@ def nothing_changes(monkeypatch):
 
     With death and release also made improbable (see `quiet_outcomes`),
     every generated hour after the first then skips the history append, so
-    the history grows by at most one row after the origin. The reference
-    digests come from the same changes applied to the reference
-    implementation.
+    the history grows by at most one row after the origin. The prefix
+    descriptors of the feedback arms also read the patched policy, so the
+    reference implementation was patched in the same places to give the
+    reference digests.
     """
     next_outputs, treatments = M.GroupedModel.next_outputs, M.Policy.treatments
 
@@ -160,7 +161,8 @@ def test_skipped_appends_against_reference(expected, arm, nothing_changes, monke
         assert last_lengths and bool((last_lengths[0] == start + 2).all()), \
             "a generated hour after the first joined the history"
         # Nothing was recorded either: unrecorded variables carry forward,
-        # apart from those that `update_derived` recomputes every hour.
+        # apart from those that `update_derived` recomputes every hour. The
+        # probe finds the columns that update_derived writes.
         probe = torch.randn(1, 2, cont.shape[-1], generator=torch.Generator().manual_seed(0))
         written = (V.update_derived(probe.clone(), 1, probe[:, 0]) != probe)[0, 1]
         carried = [i for i in pulse.pulse.output_indices if not written[i]]

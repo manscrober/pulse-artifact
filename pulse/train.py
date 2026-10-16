@@ -265,9 +265,8 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     The published weights were trained on a CUDA device. Training on the
     CPU or on Apple MPS follows the same procedure, data order and
     stopping rule, but floating-point results differ between devices, so
-    it yields different weights.
-    The tests check the procedure bitwise against the reference
-    implementation on the CPU.
+    it yields different weights. The tests check the procedure bitwise
+    against the reference implementation on the CPU.
     """
     if phase not in PHASES:
         raise ValueError(f"unknown phase {phase}")

@@ -307,7 +307,8 @@ def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int,
     directory holding rollouts made with other settings is refused.
     `provenance`, for example the SHA-256 digests of the checkpoints, is
     stored and checked with the settings, so that existing case files are
-    never kept for rollouts of other weights.
+    never kept for rollouts of other weights; an empty mapping counts as
+    none.
     """
     n = test["continuous"].shape[0]
     record = {"arm": asdict(arm), "origin": k, "paths": paths, "per_call": per_call, "seed": SEED + 1000 * k}
