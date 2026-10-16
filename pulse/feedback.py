@@ -18,6 +18,8 @@ of itself.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 from torch import nn
 
@@ -30,6 +32,62 @@ PROBABILITIES = (0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 
                  0.975, 0.99, 0.995, 0.999)
 
 Descriptors = tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+
+
+@dataclass(frozen=True)
+class Arm:
+    """How a model reads its own output back, in training and in rollouts.
+
+    `weights` names the trained checkpoint, and the training phases other
+    than the policy are the arms' weights.
+
+    `two_pass` draws the next-hour binary outcomes first and conditions the
+    continuous laws on that draw, with the history keeping the outcomes
+    already realised; otherwise the continuous encoders see outcomes drawn
+    afresh for every history row. `feedback` keeps the descriptor history
+    of `RolloutFeedback`; `quantiles` and `probabilities` choose which
+    descriptors the model reads, and `mean_state` replaces the sampled
+    values in the history by predictive means. `sobol` draws binary
+    branches from a shared Sobol table.
+
+    Feedback arms always use the descriptor settings of the published
+    runs: generated rows carry the laws they were drawn from, and rows
+    before the origin carry teacher-forced laws (see `RolloutFeedback`).
+    The research driver's own defaults were point descriptors and no
+    prefix descriptors; those settings are not provided here.
+    """
+
+    weights: str
+    two_pass: bool = False
+    feedback: bool = False
+    quantiles: bool = False
+    probabilities: bool = False
+    mean_state: bool = False
+    sobol: bool = False
+
+    def __post_init__(self):
+        if (self.sobol or self.feedback) and not self.two_pass:
+            raise ValueError("Sobol draws and feedback need the two-pass step")
+        if (self.quantiles or self.probabilities or self.mean_state) and not self.feedback:
+            raise ValueError("descriptors need feedback")
+
+
+ARMS = {
+    "sample": Arm("sample"),
+    "sample_twopass": Arm("sample", two_pass=True),
+    "sample_sobol": Arm("sample", two_pass=True, sobol=True),
+    # The combined method.
+    "distribution": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
+                        mean_state=True, sobol=True),
+    "no_sobol": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
+                    mean_state=True),
+    "mean_only": Arm("sample", two_pass=True, feedback=True, mean_state=True),
+    # Descriptors of both kinds with the simulator's own sampled values in the history.
+    "sampled_state": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
+                         sobol=True),
+    "quantile_only": Arm("quantile_only", two_pass=True, feedback=True, quantiles=True),
+    "probability_only": Arm("probability_only", two_pass=True, feedback=True, probabilities=True),
+}
 
 
 def quantiles_of(params: cnf.Params) -> torch.Tensor:

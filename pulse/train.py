@@ -43,10 +43,9 @@ import torch.nn.functional as F
 
 from pulse import cnf
 from pulse import model as M
-from pulse import simulate as S
 from pulse import variables as V
 from pulse.data import Part, Prepared, Protocol
-from pulse.feedback import FeedbackPULSE, build_pulse, generator_states, restore_generators
+from pulse.feedback import ARMS, Arm, FeedbackPULSE, build_pulse, generator_states, restore_generators
 
 PHASES = ("policy", "sample", "distribution", "quantile_only", "probability_only")
 WAIT_WEIGHT = 0.05
@@ -104,7 +103,7 @@ def _hours_to_next_record(recorded: torch.Tensor, hours: torch.Tensor) -> torch.
     return waits
 
 
-def pulse_loss(pulse: FeedbackPULSE, batch: Part, arm: S.Arm) -> torch.Tensor:
+def pulse_loss(pulse: FeedbackPULSE, batch: Part, arm: Arm) -> torch.Tensor:
     core = pulse.pulse
     history = {k: batch[k] for k in ("continuous", "binary", "static", "time_hours", "continuous_mask")}
     out = pulse(history, quantiles=arm.quantiles, probabilities=arm.probabilities)
@@ -143,7 +142,7 @@ def batch_loss(model, part: Part, ids: np.ndarray, phase: str, device) -> torch.
     batch = {k: v[ids].to(device) for k, v in part.items()}
     if phase == "policy":
         return policy_loss(model, batch)
-    return pulse_loss(model, batch, S.ARMS[phase])
+    return pulse_loss(model, batch, ARMS[phase])
 
 
 # MPS attention dropout ------------------------------------------------------

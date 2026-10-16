@@ -23,7 +23,7 @@ The forecast origin `k` is the paper's: the first generated hour is hour
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 
 import torch
@@ -31,7 +31,9 @@ import torch
 from pulse import cnf
 from pulse import variables as V
 from pulse.data import Part, case_path, last_recorded_row, save_case
-from pulse.feedback import FeedbackPULSE, RolloutFeedback
+# ARMS is defined with the feedback it describes; the command line and the
+# README also reach it as pulse.simulate.ARMS.
+from pulse.feedback import ARMS, Arm, FeedbackPULSE, RolloutFeedback
 from pulse.model import Policy
 
 STEP_HOURS = 1.0  # length of one generated step
@@ -41,58 +43,6 @@ SEED = 500_000
 # used calls of 8.
 PER_CALL = 8
 
-
-@dataclass(frozen=True)
-class Arm:
-    """How a rollout feeds its own output back. `weights` names the trained checkpoint.
-
-    `two_pass` draws the next-hour binary outcomes first and conditions the
-    continuous laws on that draw, with the history keeping the outcomes
-    already realised; otherwise the continuous encoders see outcomes drawn
-    afresh for every history row. `feedback` keeps the descriptor history
-    of `pulse.feedback`; `quantiles` and `probabilities` choose which
-    descriptors the model reads, and `mean_state` replaces the sampled
-    values in the history by predictive means. `sobol` draws binary
-    branches from a shared Sobol table.
-
-    Feedback arms always use the descriptor settings of the published
-    runs: generated rows carry the laws they were drawn from, and rows
-    before the origin carry teacher-forced laws (see `RolloutFeedback`).
-    The research driver's own defaults were point descriptors and no
-    prefix descriptors; those settings are not provided here.
-    """
-
-    weights: str
-    two_pass: bool = False
-    feedback: bool = False
-    quantiles: bool = False
-    probabilities: bool = False
-    mean_state: bool = False
-    sobol: bool = False
-
-    def __post_init__(self):
-        if (self.sobol or self.feedback) and not self.two_pass:
-            raise ValueError("Sobol draws and feedback need the two-pass step")
-        if (self.quantiles or self.probabilities or self.mean_state) and not self.feedback:
-            raise ValueError("descriptors need feedback")
-
-
-ARMS = {
-    "sample": Arm("sample"),
-    "sample_twopass": Arm("sample", two_pass=True),
-    "sample_sobol": Arm("sample", two_pass=True, sobol=True),
-    # The combined method.
-    "distribution": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
-                        mean_state=True, sobol=True),
-    "no_sobol": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
-                    mean_state=True),
-    "mean_only": Arm("sample", two_pass=True, feedback=True, mean_state=True),
-    # Descriptors of both kinds with the simulator's own sampled values in the history.
-    "sampled_state": Arm("distribution", two_pass=True, feedback=True, quantiles=True, probabilities=True,
-                         sobol=True),
-    "quantile_only": Arm("quantile_only", two_pass=True, feedback=True, quantiles=True),
-    "probability_only": Arm("probability_only", two_pass=True, feedback=True, probabilities=True),
-}
 
 SOBOL_SEED = 362
 

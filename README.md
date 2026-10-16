@@ -508,11 +508,12 @@ tests fail on a release.
 - `pulse/model.py` builds the grouped patient model and the treatment
   policy, maps the parameter names of the reference implementation, and
   reads and writes checkpoints.
-- `pulse/feedback.py` adds the distribution history: descriptors of the
-  predicted laws in training and during rollouts, and the mean state.
+- `pulse/feedback.py` defines the rollout arms (`ARMS`) and adds the
+  distribution history: descriptors of the predicted laws in training and
+  during rollouts, and the mean state.
 - `pulse/train.py` trains the policy and the patient models.
-- `pulse/simulate.py` defines the rollout arms and writes the sampled paths
-  of the test patients.
+- `pulse/simulate.py` rolls out the arms and writes the sampled paths of
+  the test patients.
 - `pulse/score.py` computes the aligned scores and the paired bootstrap.
 - `pulse/__main__.py` is the command line, `python -m pulse`.
 - `sql/` holds the three scripts that create the cohort in PostgreSQL.
