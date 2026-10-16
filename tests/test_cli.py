@@ -12,11 +12,12 @@ from pulse import simulate as S
 from pulse import train as T
 
 
-def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp_path):
+def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp_path, capsys):
     calls, prepared = [], []
     monkeypatch.setattr(cli, "_prepare", lambda cache, protocol: prepared.append(cache) or ("prepared", cache))
 
-    def fit(phase, prepared, policy, out, device, settings):
+    def fit(phase, prepared, policy, out, device, settings, on_epoch):
+        on_epoch({"epoch": 1, "validation_loss": 0.5, "updates": 2})
         calls.append((phase, policy, out, device, settings))
         return {"model": "trained policy" if phase == "policy" else "pulse", "validation_loss": 1.0}
 
@@ -25,6 +26,8 @@ def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp
     assert [c[0] for c in calls] == ["policy", "sample"]
     assert calls[0][1] is None and calls[1][1] == "trained policy"
     assert calls[1][4] == T.Settings(epochs=3)
+    printed = capsys.readouterr().out
+    assert "policy epoch 1: validation loss 0.500000" in printed and "sample epoch 1:" in printed
     with pytest.raises(SystemExit):
         cli.main(["train", "--phases", "unknown"])
     with pytest.raises(SystemExit, match="policy must come first"):

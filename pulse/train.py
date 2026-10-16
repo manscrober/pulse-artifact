@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import contextlib
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -248,7 +249,7 @@ def validation(model, part: Part, phase: str, micro: int, device) -> float:
 
 
 def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str = "cpu",
-        settings: Settings = Settings()) -> dict:
+        settings: Settings = Settings(), on_epoch: Callable[[dict], None] | None = None) -> dict:
     """Train one phase; write the best validation weights to `<out>/<phase>.pt`.
 
     `<out>/protocol.json` receives the protocol, whose cache digest the
@@ -257,7 +258,9 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     the best validation loss and whether training stopped early. The
     returned policy is frozen and in evaluation mode, ready for the PULSE
     phases. Only the best epoch's weights are written; there is no
-    last-epoch checkpoint.
+    last-epoch checkpoint. `on_epoch`, when given, receives each
+    epoch's entry of the validation history as soon as it is known; the
+    command line prints it.
 
     The published weights were trained on a CUDA device. Training on the
     CPU or on Apple MPS follows the same procedure, data order and
@@ -272,11 +275,11 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     if protocol.exists() and Protocol.load(protocol) != prepared.protocol:
         raise ValueError(f"{protocol} holds another protocol")
     with mps_attention_dropout() if torch.device(device).type == "mps" else contextlib.nullcontext():
-        return _fit(phase, prepared, policy, Path(out), device, settings)
+        return _fit(phase, prepared, policy, Path(out), device, settings, on_epoch)
 
 
 def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str,
-         settings: Settings) -> dict:
+         settings: Settings, on_epoch: Callable[[dict], None] | None) -> dict:
     if policy is not None:
         policy.to(device)
     model = build(phase, prepared, policy).to(device)
@@ -304,7 +307,8 @@ def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, dev
         if not math.isfinite(loss):
             raise RuntimeError("non-finite validation loss")
         history.append({"epoch": epoch + 1, "validation_loss": loss, "updates": updates})
-        print(f"{phase} epoch {epoch + 1}: validation loss {loss:.6f}", flush=True)
+        if on_epoch is not None:
+            on_epoch(dict(history[-1]))
         if loss < best:
             best, best_state = loss, {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
         scheduler.step()

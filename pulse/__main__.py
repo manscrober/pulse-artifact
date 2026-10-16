@@ -142,7 +142,10 @@ def train(args) -> None:
     for phase in phases:
         if phase != "policy" and policy is None:
             policy = _load_policy(args.out, prepared.protocol).to(args.device)
-        result = T.fit(phase, prepared, policy, args.out, device=args.device, settings=settings)
+        result = T.fit(phase, prepared, policy, args.out, device=args.device, settings=settings,
+                       on_epoch=lambda entry, phase=phase: print(
+                           f"{phase} epoch {entry['epoch']}: validation loss {entry['validation_loss']:.6f}",
+                           flush=True))
         if phase == "policy":
             policy = result["model"]
         print(f"{phase}: best validation loss {result['validation_loss']:.6f} -> {args.out / (phase + '.pt')}")

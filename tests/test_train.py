@@ -50,9 +50,12 @@ def test_first_updates(expected, phase):
 
 
 @pytest.mark.parametrize("phase", ["policy", "distribution"])
-def test_fit(expected, phase, tmp_path):
+def test_fit(expected, phase, tmp_path, capsys):
     settings = T.Settings(epochs=3, batch=BATCH, micro=MICRO, patience=1, min_epochs=2)
-    result = T.fit(phase, prepared(), None if phase == "policy" else frozen_policy(), tmp_path, "cpu", settings)
+    reported = []
+    result = T.fit(phase, prepared(), None if phase == "policy" else frozen_policy(), tmp_path, "cpu", settings,
+                   on_epoch=reported.append)
+    assert reported == result["history"] and capsys.readouterr().out == ""
     losses = [h["validation_loss"] for h in result["history"]]
     expected(f"fit.{phase}.validation", torch.tensor(losses, dtype=torch.float64))
     expected(f"fit.{phase}.parameters", flat(result["model"].named_parameters()))
