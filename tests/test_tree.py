@@ -13,6 +13,7 @@ while any remains.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -121,6 +122,22 @@ def test_release_walk_skips_reader_outputs():
 
 def test_no_data_files_are_tracked():
     assert not [str(p.relative_to(ROOT)) for p in repository_files() if not is_allowed_file(p)]
+
+
+REFERENCE = "research implementation, camera-ready revision"
+HEX_RUN = re.compile(r"(?<![0-9A-Za-z])[0-9a-fA-F]{7,40}(?![0-9A-Za-z])")
+
+
+def test_fixture_metadata_names_no_commit():
+    """Fixture metadata describe the reference in words.
+
+    A commit of the private research code cannot be resolved by a reader.
+    """
+    for path in sorted(FIXTURES.glob("*/*.json")):
+        meta = json.loads(path.read_text())["meta"]
+        assert meta["reference"] == REFERENCE, path
+        assert not [v for v in map(str, meta.values()) if HEX_RUN.search(v)], path
+    assert HEX_RUN.search("revision " + "ABCDEF1") and HEX_RUN.search("deadbeef") and not HEX_RUN.search("2.13.0")
 
 
 def test_detector():

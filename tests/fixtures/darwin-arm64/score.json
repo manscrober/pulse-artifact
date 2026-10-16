@@ -259,7 +259,7 @@
   }
  },
  "meta": {
-  "reference": "research reference implementation",
+  "reference": "research implementation, camera-ready revision",
   "torch": "2.13.0"
  }
 }
