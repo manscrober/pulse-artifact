@@ -47,7 +47,7 @@ def test_generator_after_each_call(expected, arm):
         for first in range(0, 3, PER_CALL):
             torch.manual_seed(S.SEED + 1000 * k + first)
             S.rollout(pulse, policy, S.ARMS[arm], {key: v[first:first + PER_CALL] for key, v in test.items()},
-                      D.last_recorded_row(k), PATHS)
+                      k, PATHS)
             expected(f"{arm}.k{k}.first{first}.after", torch.rand(2))
 
 
@@ -149,7 +149,7 @@ def test_skipped_appends_against_reference(expected, arm, nothing_changes, monke
     for k in (6, 2):
         start = D.last_recorded_row(k)
         torch.manual_seed(S.SEED + 1000 * k)
-        cont, binary = S.rollout(pulse, policy, S.ARMS[arm], test, start, PATHS)
+        cont, binary = S.rollout(pulse, policy, S.ARMS[arm], test, k, PATHS)
         for i in range(3):
             expected(f"skip.{arm}.k{k}.case{i}.continuous", cont[i])
             expected(f"skip.{arm}.k{k}.case{i}.binary", binary[i])

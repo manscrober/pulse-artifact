@@ -30,7 +30,7 @@ import torch
 
 from pulse import cnf
 from pulse import variables as V
-from pulse.data import Part, case_path, last_recorded_row, save_case
+from pulse.data import Part, case_path, first_forecast_row, last_recorded_row, save_case
 # ARMS is defined with the feedback it describes; the command line and the
 # README also reach it as pulse.simulate.ARMS.
 from pulse.feedback import ARMS, Arm, FeedbackPULSE, RolloutFeedback
@@ -90,10 +90,124 @@ def _absorb(previous: torch.Tensor, nxt: torch.Tensor, probs: torch.Tensor, outc
     return out
 
 
+def _recorded_rows(batch: Part, k: int, paths: int, means: torch.Tensor):
+    """Each patient repeated `paths` times, with the recorded rows filled as the rollout reads them.
+
+    Returns continuous [R, T, V] forward-filled and filled after events
+    recorded by the origin, binary [R, T, K], hours [R, T] with the
+    generated hours on a one-hour grid after the origin, static [R, S] and
+    the recorded-value mask [R, T, V].
+    """
+    steps, last, first = batch["continuous"].shape[1], last_recorded_row(k), first_forecast_row(k)
+    times = batch["time_hours"].clone()
+    grid = torch.arange(1, steps - last, device=times.device, dtype=times.dtype)
+    times[:, first:] = times[:, last:last + 1] + STEP_HOURS * grid
+    keep = V.zero_invalid_mask(batch["continuous"], batch["continuous_mask"]) > 0
+
+    def repeat(v):
+        return v.repeat_interleave(paths, dim=0).clone()
+
+    binary, times, static = repeat(batch["binary"]), repeat(times), repeat(batch["static"])
+    keep = keep.repeat_interleave(paths, dim=0)
+    # Only events already recorded by the origin may alter the recorded rows.
+    past = binary.clone()
+    past[:, first:] = 0
+    death, release, _ = V.event_times(past)
+    cont = V.fill_after_events(V.forward_fill(repeat(batch["continuous"]), keep, means), death, release, means)
+    return cont, binary, times, static, keep
+
+
+class _EventHistory:
+    """The rows PULSE reads: recorded rows first, generated rows appended, padding after.
+
+    A generated hour joins only when something was recorded, an event
+    occurred or a treatment changed, so `lengths` [R] can fall behind the
+    hour index.
+    """
+
+    def __init__(self, cont: torch.Tensor, binary: torch.Tensor, keep: torch.Tensor, times: torch.Tensor,
+                 k: int):
+        rows, steps, nv = cont.shape
+        self.continuous = cont.new_zeros(rows, steps, nv)
+        self.binary = binary.new_zeros(rows, steps, binary.shape[-1])
+        self.mask = cont.new_zeros(rows, steps, nv)
+        self.time = times.new_zeros(rows, steps)
+        first = first_forecast_row(k)
+        self.continuous[:, :first] = cont[:, :first]
+        self.binary[:, :first] = binary[:, :first]
+        self.mask[:, :first] = keep[:, :first].to(cont.dtype)
+        self.time[:, :first] = times[:, :first]
+        self.lengths = torch.full((rows,), first, device=cont.device, dtype=torch.long)
+
+    def model_input(self, static: torch.Tensor) -> dict[str, torch.Tensor]:
+        steps = self.continuous.shape[1]
+        padding = torch.arange(steps, device=self.continuous.device).unsqueeze(0) >= self.lengths.unsqueeze(1)
+        return {"continuous": self.continuous, "binary": self.binary, "continuous_mask": self.mask,
+                "time_hours": self.time, "static": static, "padding_mask": padding}
+
+    def append(self, joins: torch.Tensor, timed: torch.Tensor, cont: torch.Tensor, binary: torch.Tensor,
+               mask: torch.Tensor, hours: torch.Tensor, gap: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Append the new hour [R, ...] to the rows where `joins`; returns those rows and their columns.
+
+        A row that is `timed` (a variable was recorded or an event
+        occurred) sits one `gap` after its previous history row; the
+        other rows take `hours` [R], the new hour on the simulator's clock.
+        """
+        if not joins.any():
+            empty = torch.empty(0, device=cont.device, dtype=torch.long)
+            return empty, empty
+        rows = joins.nonzero(as_tuple=True)[0]
+        cols = self.lengths[rows]
+        self.continuous[rows, cols] = cont[rows]
+        self.binary[rows, cols] = binary[rows]
+        self.mask[rows, cols] = mask[rows]
+        hour = hours[rows]
+        timed_rows = rows[timed[rows]]
+        if timed_rows.numel() > 0:
+            hour[torch.searchsorted(rows, timed_rows)] = (self.time[timed_rows, self.lengths[timed_rows] - 1]
+                                                          + gap[timed_rows])
+        self.time[rows, cols] = hour
+        self.lengths[rows] += 1
+        return rows, cols
+
+
+def _next_binaries(core, arm: Arm, x: dict, logits: torch.Tensor, history: _EventHistory, uniforms, hour: int,
+                   extra) -> tuple[dict, torch.Tensor, torch.Tensor]:
+    """The next-hour outputs, the drawn outcomes [R, K_out] and their probabilities [R, K_out]."""
+    outcome, lengths = core.binary_output_indices, history.lengths
+    last = (lengths - 1).view(-1, 1, 1).expand(-1, 1, logits.shape[-1])
+    if arm.two_pass:
+        probs = torch.sigmoid(logits).gather(1, last)[:, 0, :]
+        # The reference counts Sobol hours from the origin, one per step,
+        # so the column is the current row.
+        outcomes = (uniforms(probs, outcome, hour) < probs).float()
+        # Row j conditions on the outcomes realised at row j + 1 and the
+        # last row on the new draw.
+        realised = history.binary[..., outcome]
+        override = realised.clone()
+        override[:, :-1] = realised[:, 1:]
+        override[torch.arange(len(lengths), device=lengths.device), lengths - 1] = outcomes
+        out = core.next_outputs(x, logits, override, lengths, extra)
+        return out, outcomes, probs
+    # The continuous encoders see next-hour binaries drawn afresh for every
+    # history row, the last row's draw becoming the new hour. Drawing only
+    # for the last row would be the cleaner form, but it consumes fewer
+    # random numbers and so changes every later draw; the published sample
+    # arm drew for every row. No descriptor adapters are passed, because
+    # `Arm` allows feedback only with the two-pass step.
+    probs = torch.sigmoid(logits)
+    drawn = (torch.rand_like(probs) < probs).float()
+    out = core.next_outputs(x, logits, drawn, lengths)
+    return out, drawn.gather(1, last)[:, 0, :], out["bin_probs"][:, 0, :]
+
+
 @torch.no_grad()
-def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: int,
+def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
             paths: int) -> tuple[torch.Tensor, torch.Tensor]:
-    """Generate hours `start + 1` onwards; returns continuous [N, P, T, V] and binary [N, P, T, K]."""
+    """Generate the hours after forecast origin `k`, from row `first_forecast_row(k)` on.
+
+    Returns continuous [N, P, T, V] and binary [N, P, T, K].
+    """
     core = pulse.pulse
     pulse.eval()
     policy.eval()
@@ -103,35 +217,10 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: 
     primary, outcome = core.output_indices, core.binary_output_indices
     bolus, vaso = V.BOLUS, V.VASOPRESSOR
 
-    # Future hours are a fixed one-hour grid after the origin.
-    times = batch["time_hours"].clone()
-    grid = torch.arange(1, steps - start, device=times.device, dtype=times.dtype)
-    times[:, start + 1:] = times[:, start:start + 1] + STEP_HOURS * grid
-    keep = V.zero_invalid_mask(batch["continuous"], batch["continuous_mask"]) > 0
-
-    def repeat(v):
-        return v.repeat_interleave(paths, dim=0).clone()
-
-    binary, times, static = repeat(batch["binary"]), repeat(times), repeat(batch["static"])
-    keep = keep.repeat_interleave(paths, dim=0)
     means = core.cont_means.to(torch.float32)
-    # Only events already recorded by the origin may alter the recorded rows.
-    past = binary.clone()
-    past[:, start + 1:] = 0
-    death, release, _ = V.event_times(past)
-    cont = V.fill_after_events(V.forward_fill(repeat(batch["continuous"]), keep, means), death, release, means)
+    cont, binary, times, static, keep = _recorded_rows(batch, k, paths, means)
     baseline = cont[:, 0].clone()
-
-    # Event history: recorded rows first, generated rows appended, padding after.
-    hist_cont = cont.new_zeros(rows_total, steps, nv)
-    hist_bin = binary.new_zeros(rows_total, steps, binary.shape[-1])
-    hist_mask = cont.new_zeros(rows_total, steps, nv)
-    hist_time = times.new_zeros(rows_total, steps)
-    hist_cont[:, :start + 1] = cont[:, :start + 1]
-    hist_bin[:, :start + 1] = binary[:, :start + 1]
-    hist_mask[:, :start + 1] = keep[:, :start + 1].to(cont.dtype)
-    hist_time[:, :start + 1] = times[:, :start + 1]
-    lengths = torch.full((rows_total,), start + 1, device=cont.device, dtype=torch.long)
+    history = _EventHistory(cont, binary, keep, times, k)
     table = sobol_table(paths, cont.device) if arm.sobol else None
     feedback = (RolloutFeedback(pulse, rows_total, steps, quantiles=arm.quantiles, probabilities=arm.probabilities,
                                 mean_state=arm.mean_state) if arm.feedback else None)
@@ -143,41 +232,16 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: 
             return torch.rand_like(probs)
         return table[path_of_row, hour][:, columns].reshape_as(probs)
 
-    for t in range(start, steps - 1):
-        padding = torch.arange(steps, device=cont.device).unsqueeze(0) >= lengths.unsqueeze(1)
-        binary_hist = hist_bin.clone()
-        history = {"continuous": hist_cont, "binary": binary_hist, "continuous_mask": hist_mask,
-                   "time_hours": hist_time, "static": static, "padding_mask": padding}
+    last = last_recorded_row(k)
+    for t in range(last, steps - 1):
+        model_input = history.model_input(static)
         if feedback is not None:
-            if t == start:
-                feedback.prefix(history, policy, start + 1)
-            history["continuous"] = feedback.history_values(hist_cont)
-        x = core.inputs(history)
+            if t == last:
+                feedback.prefix(model_input, policy, first_forecast_row(k))
+            model_input["continuous"] = feedback.history_values(history.continuous)
+        x = core.inputs(model_input)
         logits = core.binary_logits(x, extra)
-        last = (lengths - 1).view(-1, 1, 1).expand(-1, 1, logits.shape[-1])
-        if arm.two_pass:
-            bin_probs = torch.sigmoid(logits).gather(1, last)[:, 0, :]
-            # The reference counts Sobol hours from the origin, one per step,
-            # so the column is the current row t.
-            next_outcomes = (uniforms(bin_probs, outcome, t) < bin_probs).float()
-            # Row j conditions on the outcomes realised at row j + 1 and the
-            # last row on the new draw.
-            realised = binary_hist[..., outcome]
-            override = realised.clone()
-            override[:, :-1] = realised[:, 1:]
-            override[torch.arange(rows_total, device=cont.device), lengths - 1] = next_outcomes
-            out = core.next_outputs(x, logits, override, lengths, extra)
-        else:
-            # The continuous encoders see next-hour binaries drawn afresh for
-            # every history row, the last row's draw becoming the new hour.
-            # Drawing only for the last row would be the cleaner form, but it
-            # consumes fewer random numbers and so changes every later draw;
-            # the published sample arm drew for every row.
-            probs = torch.sigmoid(logits)
-            drawn = (torch.rand_like(probs) < probs).float()
-            out = core.next_outputs(x, logits, drawn, lengths)
-            next_outcomes = drawn.gather(1, last)[:, 0, :]
-            bin_probs = out["bin_probs"][:, 0, :]
+        out, next_outcomes, bin_probs = _next_binaries(core, arm, x, logits, history, uniforms, t, extra)
 
         obs_probs = torch.sigmoid(out["obs_logits"][:, 0, :]).clamp(1e-6, 1.0 - 1e-6)
         observed = torch.rand_like(obs_probs) < obs_probs
@@ -195,7 +259,7 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: 
         # the bolus volume and the vasopressor draw. Reading the last valid row
         # would be the cleaner form, but it changes every rollout; the published
         # runs read the last row.
-        treatment = policy.treatments(history["continuous"], binary_hist, static, hist_time)
+        treatment = policy.treatments(model_input["continuous"], history.binary, static, history.time)
         vaso_probs = torch.sigmoid(treatment["binary_treatment_logits"][:, -1, :])
         vaso_draw = (uniforms(vaso_probs, [vaso], t) < vaso_probs).float()
         next_cont[:, [bolus]] = treatment["continuous_treatments"][:, -1, :]
@@ -217,27 +281,14 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: 
         cont[:, t + 1, :] = next_cont
         V.update_derived(cont, t + 1, baseline)
 
-        any_recorded = observed.any(dim=1)
-        append = (any_recorded | event | (next_cont[:, bolus] - cont[:, t, bolus]).abs().gt(1e-6)
-                  | (next_bin[:, vaso] != binary[:, t, vaso]))
-        next_time = torch.where(any_recorded, times[:, t] + gap, times[:, t + 1])
-        any_recorded = any_recorded | event
-        times[:, t + 1] = torch.where(any_recorded, next_time, times[:, t])
-        if append.any():
-            rows = append.nonzero(as_tuple=True)[0]
-            cols = lengths[rows]
-            hist_cont[rows, cols] = next_cont[rows]
-            hist_bin[rows, cols] = next_bin[rows]
-            hist_mask[rows, cols] = next_mask[rows]
-            append_time = times[rows, t + 1]
-            timed = rows[any_recorded[rows]]
-            if timed.numel() > 0:
-                # Recorded rows sit one gap after the previous history row.
-                append_time[torch.searchsorted(rows, timed)] = hist_time[timed, lengths[timed] - 1] + gap[timed]
-            hist_time[rows, cols] = append_time
-            lengths[rows] += 1
-        else:
-            rows = cols = torch.empty(0, device=cont.device, dtype=torch.long)
+        # Drawn as recorded, even when an event then blanks the values.
+        drawn_recorded = observed.any(dim=1)
+        joins = (drawn_recorded | event | (next_cont[:, bolus] - cont[:, t, bolus]).abs().gt(1e-6)
+                 | (next_bin[:, vaso] != binary[:, t, vaso]))
+        timed = drawn_recorded | event
+        next_time = torch.where(drawn_recorded, times[:, t] + gap, times[:, t + 1])
+        times[:, t + 1] = torch.where(timed, next_time, times[:, t])
+        rows, cols = history.append(joins, timed, next_cont, next_bin, next_mask, times[:, t + 1], gap)
         if feedback is not None:
             feedback.record(out, vaso_probs, rows, cols, step=t, generated=cont[:, t + 1, :], recorded=next_mask,
                             baseline=baseline)
@@ -276,6 +327,6 @@ def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int,
             continue
         torch.manual_seed(SEED + 1000 * k + first)
         batch = {key: value[first:ids[-1] + 1] for key, value in test.items()}
-        cont, binary = rollout(pulse, policy, arm, batch, last_recorded_row(k), paths)
+        cont, binary = rollout(pulse, policy, arm, batch, k, paths)
         for offset, i in enumerate(ids):
             save_case(out, i, cont[offset], binary[offset])
