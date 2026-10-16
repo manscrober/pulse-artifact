@@ -7,7 +7,8 @@ functions differ between CPU instruction sets, so those modules have
 fixtures per platform. A module whose operations are all exactly rounded
 (comparisons, copies, single additions and subtractions) gives the same
 bits everywhere and keeps one set in tests/fixtures/any, used on every
-platform.
+platform. The tests only read fixtures; they are written outside this
+repository, by the scripts that run the reference implementation.
 """
 from __future__ import annotations
 
@@ -34,15 +35,8 @@ def digest(tensor: torch.Tensor) -> dict:
 
 
 def fixture_path(module: str, key: str | None = None) -> Path:
+    """The fixture file of `module` for this platform, or for the platform key `key`."""
     return FIXTURES / (key or platform_key()) / f"{module}.json"
-
-
-def write(module: str, digests: dict[str, dict], meta: dict, portable: bool = False) -> Path:
-    """Store digests for this platform, or for every platform when `portable`."""
-    path = fixture_path(module, PORTABLE if portable else None)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"meta": meta, "digests": digests}, indent=1, sort_keys=True) + "\n")
-    return path
 
 
 def load(module: str) -> dict[str, dict] | None:
