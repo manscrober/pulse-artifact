@@ -13,8 +13,8 @@ from pulse import train as T
 
 
 def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp_path):
-    calls = []
-    monkeypatch.setattr(cli, "_prepare", lambda cache, protocol: ("prepared", cache, protocol))
+    calls, prepared = [], []
+    monkeypatch.setattr(cli, "_prepare", lambda cache, protocol: prepared.append(cache) or ("prepared", cache))
 
     def fit(phase, prepared, policy, out, device, settings):
         calls.append((phase, policy, out, device, settings))
@@ -27,6 +27,9 @@ def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp
     assert calls[1][4] == T.Settings(epochs=3)
     with pytest.raises(SystemExit):
         cli.main(["train", "--phases", "unknown"])
+    with pytest.raises(SystemExit, match="policy must come first"):
+        cli.main(["train", "--out", str(tmp_path), "--phases", "sample", "policy"])
+    assert len(calls) == 2 and len(prepared) == 1  # refused lists prepare nothing
 
 
 def test_rollout_names_missing_checkpoints_before_starting(monkeypatch, tmp_path):

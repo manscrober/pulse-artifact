@@ -120,13 +120,17 @@ def train(args) -> None:
 
     from pulse import train as T
 
-    prepared = _prepare(args.cache, args.protocol)
     settings = replace(T.Settings(), **{k: v for k, v in (("epochs", args.epochs), ("batch", args.batch),
                                                           ("micro", args.micro)) if v is not None})
     phases = args.phases or list(T.PHASES)
     unknown = [p for p in phases if p not in T.PHASES]
     if unknown:
         raise SystemExit(f"unknown phases {unknown}; choose from {list(T.PHASES)}")
+    # Patient models read the policy; one trained later in the same call
+    # would leave them reading an older policy.pt.
+    if "policy" in phases and phases.index("policy") > 0:
+        raise SystemExit(f"policy must come first: {phases[:phases.index('policy')]} read the trained policy")
+    prepared = _prepare(args.cache, args.protocol)
     policy = None
     for phase in phases:
         if phase != "policy" and policy is None:
