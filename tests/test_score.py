@@ -26,8 +26,8 @@ def as_bytes(value) -> torch.Tensor:
 def test_empirical_scores_of_two_draws():
     s = score.empirical_scores(np.array([[0.0], [2.0]]), np.array([0.5]))
     assert s["crps"][0] == pytest.approx(0.5 * (0.5 + 1.5) - 0.25 * 2.0)
-    assert s["coverage0.9"][0] == 1.0
-    assert score.empirical_scores(np.array([[0.0], [2.0]]), np.array([3.0]))["coverage0.9"][0] == 0.0
+    assert s["coverage90_inverse"][0] == 1.0
+    assert score.empirical_scores(np.array([[0.0], [2.0]]), np.array([3.0]))["coverage90_inverse"][0] == 0.0
 
 
 def test_exclusions(inputs):

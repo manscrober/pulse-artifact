@@ -29,6 +29,9 @@ from pulse import data
 from pulse import variables as V
 from pulse.data import Protocol
 
+# Per-variable scores, named as in the scored rows: the WIS over 499 central
+# intervals and the central-90% coverage from inverse-CDF quantiles.
+INTERVALS = 499
 FIELDS = ("crps", "wis499", "coverage90_inverse")
 METRICS = ("vector_rmse",) + FIELDS
 PANELS = {35: [i for i, name in enumerate(V.CONTINUOUS) if name not in V.ORDINAL],
@@ -41,14 +44,14 @@ def _quantiles(sorted_samples: np.ndarray, probabilities) -> np.ndarray:
     return sorted_samples[np.ceil(q * len(sorted_samples)).astype(int) - 1]
 
 
-def empirical_scores(samples: np.ndarray, truth: np.ndarray, intervals: int = 499) -> dict[str, np.ndarray]:
+def empirical_scores(samples: np.ndarray, truth: np.ndarray) -> dict[str, np.ndarray]:
     """CRPS, WIS and central-90% coverage of the empirical law of `samples` [M, ...] at `truth` [...]."""
     x = np.sort(np.asarray(samples, float), axis=0)
     y = np.asarray(truth, float)
     m = len(x)
     coefficient = (2 * np.arange(1, m + 1) - m - 1).reshape((m,) + (1,) * y.ndim)
     crps = np.abs(x - y).mean(axis=0) - (coefficient * x).sum(axis=0) / m ** 2
-    alphas = np.arange(1, intervals + 1) / (intervals + 1)
+    alphas = np.arange(1, INTERVALS + 1) / (INTERVALS + 1)
     lo, hi = _quantiles(x, alphas / 2), _quantiles(x, 1 - alphas / 2)
     median = _quantiles(x, [.5])[0]
     weight = alphas.reshape((-1,) + (1,) * y.ndim) / 2
@@ -58,7 +61,7 @@ def empirical_scores(samples: np.ndarray, truth: np.ndarray, intervals: int = 49
            + np.maximum(lo - y, 0).sum(axis=0) / denominator + np.maximum(y - hi, 0).sum(axis=0) / denominator)
     level = .9
     low, high = _quantiles(x, [(1 - level) / 2, (1 + level) / 2])
-    return {"crps": crps, "wis": wis, "coverage0.9": ((low <= y) & (y <= high)).astype(float)}
+    return {"crps": crps, "wis499": wis, "coverage90_inverse": ((low <= y) & (y <= high)).astype(float)}
 
 
 def _first(column: torch.Tensor) -> int | None:
@@ -132,8 +135,8 @@ def patient_statistics(y: np.ndarray, mask: np.ndarray, predictions: dict[str, n
                 continue
             draws = x[:, :, :, v].transpose(1, 0, 2)[:, valid] / sd[v]
             target = y[:, :, v][valid] / sd[v]
-            scores = empirical_scores(draws, target, intervals=499)
-            for f, source in enumerate(("crps", "wis", "coverage0.9")):
+            scores = empirical_scores(draws, target)
+            for f, source in enumerate(FIELDS):
                 sums[:, v, f] = np.bincount(owners[valid], weights=scores[source], minlength=n)
         stats[f"{arm}_sums"] = sums
         for size, panel in PANELS.items():
