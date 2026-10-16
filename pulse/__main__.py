@@ -53,7 +53,7 @@ def _parser() -> argparse.ArgumentParser:
     rollout.add_argument("--checkpoints", type=Path, default=CHECKPOINTS,
                          help="directory with protocol.json, policy.pt and the PULSE phases")
     rollout.add_argument("--arms", nargs="+", required=True, help="names from pulse.simulate.ARMS")
-    rollout.add_argument("--origins", type=int, nargs="+", default=list(ORIGINS))
+    rollout.add_argument("--origins", type=int, nargs="+", choices=ORIGINS, default=list(ORIGINS))
     rollout.add_argument("--paths", type=int, default=100)
     rollout.add_argument("--per-call", type=int, default=None,
                          help="patients per rollout call; paths depend on it. Default: the published 8")
@@ -67,7 +67,7 @@ def _parser() -> argparse.ArgumentParser:
     score.add_argument("--rollouts", type=Path, default=ROLLOUTS)
     score.add_argument("--arms", nargs="+", required=True,
                        help="ARM or ARM:M, M scoring only the first M paths of that arm's rollouts")
-    score.add_argument("--origins", type=int, nargs="+", default=list(ORIGINS))
+    score.add_argument("--origins", type=int, nargs="+", choices=ORIGINS, default=list(ORIGINS))
     score.add_argument("--resamples", type=int, default=2000)
     score.add_argument("--out", type=Path, required=True, help="JSON file for the scored rows")
     return parser

@@ -104,3 +104,10 @@ def test_commands_import_without_the_database_driver():
     run = subprocess.run([sys.executable, "-c", hide], cwd=Path(__file__).resolve().parent.parent,
                          capture_output=True, text=True)
     assert run.returncode == 0 and "--arms" in run.stdout
+
+
+@pytest.mark.parametrize("command", ["rollout", "score"])
+def test_origins_other_than_2_and_6_are_refused(command, capsys):
+    with pytest.raises(SystemExit):
+        cli.main([command, "--arms", "sample", "--origins", "2", "3", "--out", "unused"])
+    assert "invalid choice: '3'" in capsys.readouterr().err
