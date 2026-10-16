@@ -174,7 +174,7 @@ def score(arms: dict[str, tuple[Path, int | None]], cache: dict, protocol: Proto
     reference = next(iter(arms))
     mean = torch.tensor(protocol.mean)
     sd = np.array(protocol.sd)
-    test_rows = data.split(cache["subject_ids"])["test"]
+    test_rows = data.select(cache["subject_ids"])["test"]
     rows = []
     for k in origins:
         y, mask, predictions, cases = collect(arms, cache, test_rows, mean, k)

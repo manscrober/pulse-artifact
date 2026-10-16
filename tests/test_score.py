@@ -32,7 +32,7 @@ def test_empirical_scores_of_two_draws():
 
 def test_exclusions(inputs):
     cache, protocol, arms = inputs
-    rows = data.split(cache["subject_ids"])["test"]
+    rows = data.select(cache["subject_ids"])["test"]
     mean = torch.tensor(protocol.mean)
     # Case 1 dies at hour 0 and case 2 at hour 3, before origin 6's first
     # forecast hour; case 6 lacks a file in one arm.
@@ -56,7 +56,7 @@ def test_rejects_other_cache(inputs):
 
 def test_against_reference(inputs, expected):
     cache, protocol, arms = inputs
-    rows = data.split(cache["subject_ids"])["test"]
+    rows = data.select(cache["subject_ids"])["test"]
     mean, sd = torch.tensor(protocol.mean), np.array(protocol.sd)
     for k in (2, 6):
         y, mask, predictions, cases = score.collect(arms, cache, rows, mean, k)

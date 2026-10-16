@@ -1,7 +1,6 @@
 import dataclasses
 import json
 
-import numpy as np
 import pytest
 import torch
 
@@ -78,9 +77,7 @@ def test_load_cache_rejects_other_variables(tmp_path):
 
 def test_against_reference(prepared, expected):
     cache, result = prepared
-    rows = data.split(cache["subject_ids"])
-    chosen = {"train": np.random.default_rng(data.SELECTION_SEED).permutation(rows["train"]),
-              "val": rows["val"], "test": rows["test"]}
+    chosen = data.select(cache["subject_ids"])
     for name in ("train", "val", "test"):
         expected(f"{name}_subjects", cache["subject_ids"][chosen[name]])
         for key, value in getattr(result, name).items():

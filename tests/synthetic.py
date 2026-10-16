@@ -49,7 +49,7 @@ SCORED_EVENTS = ((None, None), (0, None), (3, None), (None, 10), (15, 12), (9, 9
 def scored_cache(seed: int = 5) -> dict:
     """`cache(seed)` with the events above and recorded zeros in the first test patients."""
     c = cache(seed)
-    rows = data.split(c["subject_ids"])["test"][:len(SCORED_EVENTS)]
+    rows = data.select(c["subject_ids"])["test"][:len(SCORED_EVENTS)]
     for row, (death, release) in zip(rows, SCORED_EVENTS):
         c["binary"][row, :, [V.DEATH, V.RELEASE]] = 0.0
         if death is not None:

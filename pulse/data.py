@@ -147,6 +147,17 @@ def split(subject_ids: torch.Tensor) -> dict[str, np.ndarray]:
     return {name: eligible[np.isin(ids[eligible], block)] for name, block in zip(SPLIT, blocks)}
 
 
+def select(subject_ids: torch.Tensor) -> dict[str, np.ndarray]:
+    """Cache rows of each prepared part, in the order of its patients.
+
+    The split of `split`, with the training rows permuted by
+    `SELECTION_SEED`; validation and test rows keep cache order.
+    """
+    rows = split(subject_ids)
+    return {"train": np.random.default_rng(SELECTION_SEED).permutation(rows["train"]),
+            "val": rows["val"], "test": rows["test"]}
+
+
 def _mean_filled(values: torch.Tensor, mask: torch.Tensor) -> np.ndarray:
     values, mask = values.numpy(), mask.numpy()
     means = (values * mask).sum(axis=(0, 1)) / np.maximum(mask.sum(axis=(0, 1)), 1.0)
@@ -207,9 +218,7 @@ def prepare(cache: dict, protocol: Protocol | None = None) -> Prepared:
     covariance groups agree. Recomputed statistics can differ from the
     shipped ones in the last bit on another platform.
     """
-    rows = split(cache["subject_ids"])
-    chosen = {"train": np.random.default_rng(SELECTION_SEED).permutation(rows["train"]),
-              "val": rows["val"], "test": rows["test"]}
+    chosen = select(cache["subject_ids"])
     x = cache["continuous"].float()
     mask = cache["continuous_mask"].bool() & torch.isfinite(x)
     train = chosen["train"]
