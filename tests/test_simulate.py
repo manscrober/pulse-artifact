@@ -116,9 +116,20 @@ def quiet_outcomes(pulse: F.FeedbackPULSE) -> None:
 
 
 @pytest.mark.parametrize("arm", SKIP_ARMS)
-def test_skipped_appends_against_reference(expected, arm, nothing_changes):
+def test_skipped_appends_against_reference(expected, arm, nothing_changes, monkeypatch):
     pulse, policy = models()
     quiet_outcomes(pulse)
+    # The rows of the event history that the patient model last read, per
+    # rollout row: the last call of `inputs` on the patient model is the
+    # final generated hour's.
+    inputs, last_lengths = M.GroupedModel.inputs, []
+
+    def spy(self, history):
+        if self is pulse.pulse:
+            last_lengths[:] = [(~history["padding_mask"]).sum(1)]
+        return inputs(self, history)
+
+    monkeypatch.setattr(M.GroupedModel, "inputs", spy)
     test = part(seed=5, n=3)
     for k in (6, 2):
         start = S.origin_step(k)
@@ -128,10 +139,15 @@ def test_skipped_appends_against_reference(expected, arm, nothing_changes):
             expected(f"skip.{arm}.k{k}.case{i}.continuous", cont[i])
             expected(f"skip.{arm}.k{k}.case{i}.binary", binary[i])
         expected(f"skip.{arm}.k{k}.after", torch.rand(2))
-        # With nothing recorded, an hour joins the history only through an
-        # event or a treatment change; hours without either were skipped.
-        later, earlier = slice(start + 2, None), slice(start + 1, -1)
-        skipped = ((binary[..., later, V.DEATH] < 0.5) & (binary[..., later, V.RELEASE] < 0.5)
-                   & (binary[..., later, V.VASOPRESSOR] == binary[..., earlier, V.VASOPRESSOR])
-                   & (cont[..., later, V.BOLUS] == cont[..., earlier, V.BOLUS]))
-        assert skipped.all(), "a generated hour after the first joined the history"
+        # The first generated hour joins the history (its bolus changes from
+        # the recorded one) and no later hour does, so the final hour reads
+        # the recorded rows and one generated row.
+        assert last_lengths and bool((last_lengths[0] == start + 2).all()), \
+            "a generated hour after the first joined the history"
+        # Nothing was recorded either: unrecorded variables carry forward,
+        # apart from those that `update_derived` recomputes every hour.
+        probe = torch.randn(1, 2, cont.shape[-1], generator=torch.Generator().manual_seed(0))
+        written = (V.update_derived(probe.clone(), 1, probe[:, 0]) != probe)[0, 1]
+        carried = [i for i in pulse.pulse.output_indices if not written[i]]
+        generated = cont[..., start + 1:, carried]
+        assert torch.equal(generated[..., 1:, :], generated[..., :-1, :]), "a generated hour recorded a value"
