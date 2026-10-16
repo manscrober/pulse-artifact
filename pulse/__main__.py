@@ -134,6 +134,8 @@ def train(args) -> None:
     # were trained against the first one.
     if phases.count("policy") > 1:
         raise SystemExit("policy is named more than once in --phases")
+    if phases[0] != "policy" and not (args.out / "policy.pt").is_file():
+        raise SystemExit(f"{args.out / 'policy.pt'} is missing: train the policy first, or add policy to --phases")
     prepared = _prepare(args.cache, args.protocol)
     policy = None
     for phase in phases:
