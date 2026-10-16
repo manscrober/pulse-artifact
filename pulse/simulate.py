@@ -303,7 +303,7 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, start: 
 
 
 def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int, paths: int, out: Path,
-             per_call: int = PER_CALL) -> None:
+             per_call: int = PER_CALL, provenance: dict[str, str] | None = None) -> None:
     """Roll out every test patient and write one case file each.
 
     Patients go in groups of `per_call`; each group is seeded from the
@@ -311,9 +311,14 @@ def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int,
     which groups ran before it, but they do depend on the group size.
     `out` also receives `rollout.json` with these settings, and a
     directory holding rollouts made with other settings is refused.
+    `provenance`, for example the SHA-256 digests of the checkpoints, is
+    stored and checked with the settings, so that existing case files are
+    never kept for rollouts of other weights.
     """
     n = test["continuous"].shape[0]
     record = {"arm": asdict(arm), "origin": k, "paths": paths, "per_call": per_call, "seed": SEED + 1000 * k}
+    if provenance:
+        record["provenance"] = dict(provenance)
     settings = Path(out) / "rollout.json"
     if settings.exists() and json.loads(settings.read_text()) != record:
         raise ValueError(f"{out} holds rollouts made with other settings")

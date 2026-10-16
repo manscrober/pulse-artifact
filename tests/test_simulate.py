@@ -76,6 +76,20 @@ def test_rollout_settings_are_recorded_and_checked(tmp_path):
         S.evaluate(pulse, policy, S.ARMS["sample"], test, 6, 2, tmp_path)
 
 
+def test_rollout_provenance_is_recorded_and_checked(tmp_path):
+    pulse, policy = models()
+    test = part(seed=5, n=1)
+    first = {"policy": "a" * 64, "weights": "b" * 64}
+    S.evaluate(pulse, policy, S.ARMS["sample"], test, 6, 1, tmp_path, provenance=first)
+    assert json.loads((tmp_path / "rollout.json").read_text())["provenance"] == first
+    written = S.case_path(tmp_path, 0).read_bytes()
+    S.evaluate(pulse, policy, S.ARMS["sample"], test, 6, 1, tmp_path, provenance=dict(first))
+    assert S.case_path(tmp_path, 0).read_bytes() == written
+    for other in ({**first, "weights": "c" * 64}, None):
+        with pytest.raises(ValueError):
+            S.evaluate(pulse, policy, S.ARMS["sample"], test, 6, 1, tmp_path, provenance=other)
+
+
 SKIP_ARMS = ["sample", "sample_sobol", "distribution", "mean_only"]
 
 
