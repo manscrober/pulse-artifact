@@ -18,7 +18,7 @@ def record(expected, prefix, o):
     for key in ("mu", "log_var", "bin_logits", "bin_probs", "obs_logits", "delta_t_hours"):
         expected(f"{prefix}.{key}", o[key])
     for j in (0, 7, 35):
-        for key in ("loc", "scale", "amps", "centers", "widths", "anchor"):
+        for key in ("loc", "scale", "amps", "centers", "widths"):
             expected(f"{prefix}.params{j}.{key}", o["dist_params_list"][j][key])
 
 

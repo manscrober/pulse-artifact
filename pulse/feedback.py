@@ -35,7 +35,7 @@ Descriptors = tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 def quantiles_of(params: cnf.Params) -> torch.Tensor:
     """The 19 quantiles [..., 19] of CNF laws with parameters of leading shape [...]."""
     p = torch.as_tensor(PROBABILITIES, dtype=params["loc"].dtype, device=params["loc"].device)
-    leading = params["mu"].shape
+    leading = params["loc"].shape
     stretched = {k: v.unsqueeze(len(leading)).expand(leading + (len(p),) + v.shape[len(leading):])
                  for k, v in params.items()}
     return cnf.quantile(stretched, p)

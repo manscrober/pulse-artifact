@@ -278,7 +278,7 @@ class GroupedModel(nn.Module):
             for var, pred in self._run(index, history, x, extra).items():
                 if self.encoders[index].kind == "cnf":
                     pred["params"] = cnf.anchor(cnf.parse(pred["raw"]), x["anchor"][..., self.continuous_names.index(var)])
-                    pred["mu"] = pred["params"]["mu"]
+                    pred["mu"] = pred["params"]["loc"]
                 else:
                     pred["mu"] = pred["raw"].squeeze(-1)
                 out[var] = pred

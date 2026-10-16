@@ -24,7 +24,7 @@ def test_against_reference(expected):
         expected("sample_global", cnf.sample(params))
         expected("after_sample", torch.rand(3))
         expected("mean", cnf.mean(params))
-        leading = params["mu"].shape
+        leading = params["loc"].shape
         stretched = {k: v.unsqueeze(2).expand(leading + (len(PROBABILITIES),) + v.shape[2:])
                      for k, v in params.items()}
         expected("quantiles", cnf.quantile(stretched, PROBABILITIES))

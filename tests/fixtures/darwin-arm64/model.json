@@ -70,14 +70,6 @@
     8
    ]
   },
-  "big.params0.anchor": {
-   "dtype": "float32",
-   "sha256": "cd328c15305f38ea42fd5f9addad51cc63aa433f03a917a1667dabff814e30b4",
-   "shape": [
-    800,
-    1
-   ]
-  },
   "big.params0.centers": {
    "dtype": "float32",
    "sha256": "34f72aea3565bbe268b63efdf37e03596cc8a1fadb16e17e24fcc6e1f69ff124",
@@ -121,14 +113,6 @@
     8
    ]
   },
-  "big.params35.anchor": {
-   "dtype": "float32",
-   "sha256": "a73dfd0c209842e433b6f14ebb7af0b723e4d0cc615d6adb12bd8db6c285fdfe",
-   "shape": [
-    800,
-    1
-   ]
-  },
   "big.params35.centers": {
    "dtype": "float32",
    "sha256": "f1c145a5f9efafe13e56144d9a53f01e39d08fc771fa69f7f64e4481aeb436ba",
@@ -170,14 +154,6 @@
     800,
     1,
     8
-   ]
-  },
-  "big.params7.anchor": {
-   "dtype": "float32",
-   "sha256": "176def36173f6609e08145d9bd93676a4561df74edb9df65382b493d24ce03cf",
-   "shape": [
-    800,
-    1
    ]
   },
   "big.params7.centers": {
@@ -510,14 +486,6 @@
     8
    ]
   },
-  "next.params0.anchor": {
-   "dtype": "float32",
-   "sha256": "9fb78d5b206a0f243ac9142219fc29a0f656d65688e3e76aca76979482002cb7",
-   "shape": [
-    4,
-    1
-   ]
-  },
   "next.params0.centers": {
    "dtype": "float32",
    "sha256": "d5c4496958c95ce5cbfdc6e835cad67c13ea25b69dc633bc0386c68718435053",
@@ -561,14 +529,6 @@
     8
    ]
   },
-  "next.params35.anchor": {
-   "dtype": "float32",
-   "sha256": "16110ac37de9793e11b246fbb17b2885155bcd2bfbf430ab04cba444f165fcee",
-   "shape": [
-    4,
-    1
-   ]
-  },
   "next.params35.centers": {
    "dtype": "float32",
    "sha256": "0c155ee7e0818eddc09d39e730096bd443f4705c626a5f2e5af6386e0629f5a7",
@@ -610,14 +570,6 @@
     4,
     1,
     8
-   ]
-  },
-  "next.params7.anchor": {
-   "dtype": "float32",
-   "sha256": "2f3139ffd12d9bb30738855ade3fe3dc3092b0f5f240f9a64b2212ec17c87244",
-   "shape": [
-    4,
-    1
    ]
   },
   "next.params7.centers": {
@@ -717,14 +669,6 @@
     8
    ]
   },
-  "next_free.params0.anchor": {
-   "dtype": "float32",
-   "sha256": "676127660b4acf02d37db966c5e60909cb0446a9fe64bf62b42bf7f2f21c2bd3",
-   "shape": [
-    4,
-    1
-   ]
-  },
   "next_free.params0.centers": {
    "dtype": "float32",
    "sha256": "2ea47499f2662693042950fa94d2e68644d68532495cc5522bb49679cfac8c96",
@@ -768,14 +712,6 @@
     8
    ]
   },
-  "next_free.params35.anchor": {
-   "dtype": "float32",
-   "sha256": "96af233c1442a33854dd479847b5d5abf723ebfe4dc6d196efaa2dc9d71e3e0e",
-   "shape": [
-    4,
-    1
-   ]
-  },
   "next_free.params35.centers": {
    "dtype": "float32",
    "sha256": "d3ccb22219daf86cac27dcdca6f479cecb677bdb48b8945c5a12da2e14f86c8f",
@@ -817,14 +753,6 @@
     4,
     1,
     8
-   ]
-  },
-  "next_free.params7.anchor": {
-   "dtype": "float32",
-   "sha256": "1669e038d189d2a991aa6c6cbd4cd4f9bd07f80c88d9dd5b981260a2f2671c56",
-   "shape": [
-    4,
-    1
    ]
   },
   "next_free.params7.centers": {
@@ -8351,14 +8279,6 @@
     8
    ]
   },
-  "teacher.params0.anchor": {
-   "dtype": "float32",
-   "sha256": "c2c3677db689e71846a9abe8bdc01756f5667e4a804c9a598c22ea892b33e075",
-   "shape": [
-    4,
-    24
-   ]
-  },
   "teacher.params0.centers": {
    "dtype": "float32",
    "sha256": "1ecc9c0e66dda748a1eee0be92f7ba82f9131e802b73226196a583a974162c6b",
@@ -8402,14 +8322,6 @@
     8
    ]
   },
-  "teacher.params35.anchor": {
-   "dtype": "float32",
-   "sha256": "ab6ca1a5237ebcbb8124fedadd12ad2853baaf7d453b8d7d46d34ce72cc8306c",
-   "shape": [
-    4,
-    24
-   ]
-  },
   "teacher.params35.centers": {
    "dtype": "float32",
    "sha256": "e1aba641c1edfe40c635dcc8526cbb3cc52c1784067ff3572741754f3d5ae28a",
@@ -8451,14 +8363,6 @@
     4,
     24,
     8
-   ]
-  },
-  "teacher.params7.anchor": {
-   "dtype": "float32",
-   "sha256": "521bf6857e7454651dc0774285a0def8f05ace9a9175372e331215891b5d359b",
-   "shape": [
-    4,
-    24
    ]
   },
   "teacher.params7.centers": {
@@ -8558,14 +8462,6 @@
     8
    ]
   },
-  "train.params0.anchor": {
-   "dtype": "float32",
-   "sha256": "c2c3677db689e71846a9abe8bdc01756f5667e4a804c9a598c22ea892b33e075",
-   "shape": [
-    4,
-    24
-   ]
-  },
   "train.params0.centers": {
    "dtype": "float32",
    "sha256": "71d61d1c7843b2bd42691bb4c1b22a0479c183bfa7929b32eea73b7082659ebd",
@@ -8609,14 +8505,6 @@
     8
    ]
   },
-  "train.params35.anchor": {
-   "dtype": "float32",
-   "sha256": "ab6ca1a5237ebcbb8124fedadd12ad2853baaf7d453b8d7d46d34ce72cc8306c",
-   "shape": [
-    4,
-    24
-   ]
-  },
   "train.params35.centers": {
    "dtype": "float32",
    "sha256": "808d2e800a15e4d30c659f4502ae0c6316cc80010c7e22fe1c72187b4a575b6a",
@@ -8658,14 +8546,6 @@
     4,
     24,
     8
-   ]
-  },
-  "train.params7.anchor": {
-   "dtype": "float32",
-   "sha256": "521bf6857e7454651dc0774285a0def8f05ace9a9175372e331215891b5d359b",
-   "shape": [
-    4,
-    24
    ]
   },
   "train.params7.centers": {

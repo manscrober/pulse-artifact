@@ -41,7 +41,7 @@ QUAD_WEIGHTS = torch.tensor(_weights / np.sqrt(np.pi), dtype=torch.float32)
 Params = dict[str, torch.Tensor]
 
 # The parameters the flow functions read; callers stack these over variables.
-FLOW_KEYS = ("loc", "scale", "log_scale", "amps", "centers", "widths", "mu")
+FLOW_KEYS = ("loc", "scale", "log_scale", "amps", "centers", "widths")
 
 
 def parse(raw: torch.Tensor) -> Params:
@@ -52,18 +52,13 @@ def parse(raw: torch.Tensor) -> Params:
     centers = 4.0 * torch.tanh(raw[..., 2 + BASIS:2 + 2 * BASIS] / 4.0)
     widths = torch.clamp(F.softplus(raw[..., 2 + 2 * BASIS:2 + 3 * BASIS]) + 0.25, max=5.0)
     return {"loc": loc, "log_scale": log_scale, "scale": torch.exp(log_scale), "amps": amps,
-            "centers": centers, "widths": widths, "mu": loc, "median": loc, "log_var": 2.0 * log_scale}
+            "centers": centers, "widths": widths, "log_var": 2.0 * log_scale}
 
 
 def anchor(params: Params, value: torch.Tensor) -> Params:
     """Shift the location by `value`, the variable's last standardised value."""
     shifted = dict(params)
-    shifted["anchor"] = value
-    shifted["residual_loc"] = params["loc"]
-    shifted["residual_mu"] = params["mu"]
     shifted["loc"] = params["loc"] + value
-    shifted["mu"] = params["mu"] + value
-    shifted["median"] = params["median"] + value
     return shifted
 
 
@@ -102,22 +97,22 @@ def nll(p: Params, target: torch.Tensor) -> torch.Tensor:
 
 def sample(p: Params, z: torch.Tensor | None = None) -> torch.Tensor:
     """Draw values; without `z` the base draws come from the global generator."""
-    z = torch.randn_like(p["mu"]) if z is None else z.to(p["mu"]).reshape_as(p["mu"])
+    z = torch.randn_like(p["loc"]) if z is None else z.to(p["loc"]).reshape_as(p["loc"])
     return forward(z, p)
 
 
 def quantile(p: Params, q: torch.Tensor | float) -> torch.Tensor:
     """Values at probabilities `q`, broadcast to the parameter shape."""
-    q = torch.as_tensor(q, device=p["mu"].device, dtype=p["mu"].dtype).expand_as(p["mu"])
+    q = torch.as_tensor(q, device=p["loc"].device, dtype=p["loc"].dtype).expand_as(p["loc"])
     q = q.clamp(QUANTILE_EPS, 1.0 - QUANTILE_EPS)
     return forward(math.sqrt(2.0) * torch.erfinv(2.0 * q - 1.0), p)
 
 
 def mean(p: Params) -> torch.Tensor:
     """Predictive mean by Gauss-Hermite quadrature over the base draw."""
-    nodes = QUAD_NODES.to(device=p["mu"].device, dtype=p["mu"].dtype)
-    weights = QUAD_WEIGHTS.to(device=p["mu"].device, dtype=p["mu"].dtype)
-    leading, count = p["mu"].shape, nodes.numel()
+    nodes = QUAD_NODES.to(device=p["loc"].device, dtype=p["loc"].dtype)
+    weights = QUAD_WEIGHTS.to(device=p["loc"].device, dtype=p["loc"].dtype)
+    leading, count = p["loc"].shape, nodes.numel()
     z = nodes.view((1,) * len(leading) + (count,)).expand(leading + (count,))
     expanded = {"loc": p["loc"].unsqueeze(-1).expand_as(z), "scale": p["scale"].unsqueeze(-1).expand_as(z)}
     for key in ("amps", "centers", "widths"):
