@@ -12,42 +12,66 @@ def test_lists():
     assert all(name in V.BINARY for name in V.ABSORBING)
 
 
-def test_against_reference(expected):
-    data = trajectories(seed=3)
-    cont, keep, binary, means, event_now = (data[k] for k in ("continuous", "keep", "binary", "means", "event_now"))
+@pytest.fixture(scope="module")
+def data():
+    """Synthetic trajectories shared by the reference tests, which only read them."""
+    return trajectories(seed=3)
+
+
+def test_bounds(expected):
     low, high = V.bounds()
     expected("bounds_low", low)
     expected("bounds_high", high)
 
-    derived, plain = cont.clone(), cont.clone()
+
+def test_update_derived(expected, data):
+    derived, plain = data["continuous"].clone(), data["continuous"].clone()
     baseline = derived[:, 0].clone()
-    for t in range(cont.shape[1]):
+    for t in range(derived.shape[1]):
         V.update_derived(derived, t, baseline)
         V.update_derived(plain, t)
     expected("derived", derived)
     expected("derived_without_baseline", plain)
 
-    expected("fill_zero_invalid", V.forward_fill_zero_invalid(cont[:, 5].clone(), cont[:, 4], event_now))
+
+def test_forward_fill_zero_invalid(expected, data):
+    cont = data["continuous"]
+    expected("fill_zero_invalid", V.forward_fill_zero_invalid(cont[:, 5].clone(), cont[:, 4], data["event_now"]))
     expected("fill_zero_invalid_no_event", V.forward_fill_zero_invalid(cont[:, 5].clone(), cont[:, 4]))
 
-    death, release, event = V.event_times(binary)
+
+def test_forward_fill_zero_invalid_over_all_hours(expected, data):
+    sequence = data["continuous"].clone()
+    for t in range(1, sequence.shape[1]):
+        V.forward_fill_zero_invalid(sequence[:, t], sequence[:, t - 1])
+    expected("fill_zero_invalid_all_hours", sequence)
+
+
+def test_event_times(expected, data):
+    death, release, event = V.event_times(data["binary"])
     expected("death", torch.tensor(death))
     expected("release", torch.tensor(release))
     expected("event", event)
 
-    expected("zero_invalid_mask", V.zero_invalid_mask(cont, keep.float(), event))
-    expected("zero_invalid_mask_no_event", V.zero_invalid_mask(cont, keep.float()))
-    filled = V.forward_fill(cont, keep, means)
-    expected("forward_fill", filled)
-    expected("fill_after_events", V.fill_after_events(filled, death, release, means))
+
+def test_zero_invalid_mask(expected, data):
+    _, _, event = V.event_times(data["binary"])
+    keep = data["keep"].float()
+    expected("zero_invalid_mask", V.zero_invalid_mask(data["continuous"], keep, event))
+    expected("zero_invalid_mask_no_event", V.zero_invalid_mask(data["continuous"], keep))
+
+
+def test_forward_fill(expected, data):
+    expected("forward_fill", V.forward_fill(data["continuous"], data["keep"], data["means"]))
+
+
+def test_fill_after_events(expected, data):
+    death, release, _ = V.event_times(data["binary"])
+    filled = V.forward_fill(data["continuous"], data["keep"], data["means"])
+    expected("fill_after_events", V.fill_after_events(filled, death, release, data["means"]))
     expected("fill_after_death_only", V.fill_after_events(filled, death))
     expected("fill_after_single_death", V.fill_after_events(filled, death[:1]))
-    expected("fill_after_scalar_hours", V.fill_after_events(filled, 5, 9, means))
-
-    sequence = cont.clone()
-    for t in range(1, sequence.shape[1]):
-        V.forward_fill_zero_invalid(sequence[:, t], sequence[:, t - 1])
-    expected("fill_zero_invalid_all_hours", sequence)
+    expected("fill_after_scalar_hours", V.fill_after_events(filled, 5, 9, data["means"]))
 
 
 def test_event_hours_need_one_per_row_or_one_for_all():
