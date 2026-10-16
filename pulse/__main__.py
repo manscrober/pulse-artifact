@@ -105,6 +105,16 @@ def _checkpoint_state(path: Path, protocol) -> dict:
     return payload["state"]
 
 
+def _file_sha256(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def train(args) -> None:
     from dataclasses import replace
 
@@ -140,14 +150,19 @@ def rollout(args) -> None:
     test = {key: value.to(args.device) for key, value in prepared.test.items()}
     policy = _load_policy(args.checkpoints, protocol).to(args.device)
     per_call = S.PER_CALL if args.per_call is None else args.per_call
+    policy_sha256 = _file_sha256(args.checkpoints / "policy.pt")
     for name in args.arms:
         arm = S.ARMS[name]
+        weights = args.checkpoints / f"{arm.weights}.pt"
         pulse = FeedbackPULSE(M.pulse_model(protocol))
-        pulse.load_state_dict(_checkpoint_state(args.checkpoints / f"{arm.weights}.pt", protocol))
+        pulse.load_state_dict(_checkpoint_state(weights, protocol))
         pulse.to(args.device)
+        # The digests tie each rollout directory to the exact checkpoint files,
+        # so a rerun with other weights is refused, never mixed in.
+        provenance = {"policy": policy_sha256, "weights": _file_sha256(weights)}
         for origin in args.origins:
             out = args.out / name / f"k{origin}"
-            S.evaluate(pulse, policy, arm, test, origin, args.paths, out, per_call=per_call)
+            S.evaluate(pulse, policy, arm, test, origin, args.paths, out, per_call=per_call, provenance=provenance)
             print(f"{name} origin {origin}: {len(test['continuous'])} cases -> {out}")
 
 

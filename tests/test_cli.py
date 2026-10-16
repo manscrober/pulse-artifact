@@ -35,6 +35,7 @@ def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
         "test": {"continuous": __import__("torch").zeros(3, 24, 37)}, "protocol": "protocol"})())
     monkeypatch.setattr(cli, "_load_policy", lambda directory, protocol: __import__("torch").nn.Linear(1, 1))
     monkeypatch.setattr(cli, "_checkpoint_state", lambda path, protocol: path.name)
+    monkeypatch.setattr(cli, "_file_sha256", lambda path: "digest of " + path.name)
     monkeypatch.setattr("pulse.model.pulse_model", lambda protocol: None)
 
     class Pulse:
@@ -48,8 +49,8 @@ def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
             return self
 
     monkeypatch.setattr("pulse.feedback.FeedbackPULSE", Pulse)
-    monkeypatch.setattr(S, "evaluate", lambda pulse, policy, arm, test, k, paths, out, per_call:
-                        calls.append((pulse.loaded, arm, k, paths, out, per_call)))
+    monkeypatch.setattr(S, "evaluate", lambda pulse, policy, arm, test, k, paths, out, per_call, provenance:
+                        calls.append((pulse.loaded, arm, k, paths, out, per_call, provenance)))
     cli.main(["rollout", "--arms", "sample", "quantile_only", "--paths", "4", "--out", str(tmp_path)])
     assert [(c[0], c[2], c[4]) for c in calls] == [
         ("sample.pt", 2, tmp_path / "sample" / "k2"), ("sample.pt", 6, tmp_path / "sample" / "k6"),
@@ -57,6 +58,8 @@ def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
         ("quantile_only.pt", 6, tmp_path / "quantile_only" / "k6")]
     assert all(c[1] == S.ARMS[n] for c, n in zip(calls, ["sample"] * 2 + ["quantile_only"] * 2))
     assert {c[3] for c in calls} == {4} and {c[5] for c in calls} == {S.PER_CALL}
+    assert calls[0][6] == {"policy": "digest of policy.pt", "weights": "digest of sample.pt"}
+    assert calls[2][6] == {"policy": "digest of policy.pt", "weights": "digest of quantile_only.pt"}
     with pytest.raises(SystemExit):
         cli.main(["rollout", "--arms", "unknown"])
 
