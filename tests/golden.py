@@ -1,4 +1,4 @@
-"""Digests of tensors produced by the research reference implementation.
+"""Digests of tensors produced by the reference implementation.
 
 Fixtures live in tests/fixtures/<platform>/<module>.json and map a name to
 the shape, dtype and SHA-256 of a tensor's bytes. Equal digests mean

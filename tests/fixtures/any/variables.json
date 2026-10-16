@@ -99,7 +99,7 @@
   }
  },
  "meta": {
-  "reference": "research implementation, camera-ready revision",
+  "reference": "reference implementation",
   "torch": "2.13.0"
  }
 }

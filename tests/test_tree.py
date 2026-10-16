@@ -28,7 +28,7 @@ BANNED_WORDS = frozenset({
     "60965168ce762e94", "3ea125d0bff386e6", "5d72436256ada538", "487b91042c7cf27a",
     "32e83e92d45d71f6", "e12ce8285efc67c6", "c9ad8f2cc1294afa", "d3cccc73defe2a62",
     "a0ffbbd29f129a88",
-    # Names of internal result files and folders of the research code.
+    # Names of internal result files and folders of the reference implementation.
     "75b75345683a0f9b", "643aa5feafaf4a0d", "7adeb97615801e07", "11c7bc8a93678e84",
     "d2c5f4dc6f8c79d2", "9c3aa6ce0c5440fa",
 })
@@ -124,14 +124,14 @@ def test_no_data_files_are_tracked():
     assert not [str(p.relative_to(ROOT)) for p in repository_files() if not is_allowed_file(p)]
 
 
-REFERENCE = "research implementation, camera-ready revision"
+REFERENCE = "reference implementation"
 HEX_RUN = re.compile(r"(?<![0-9A-Za-z])[0-9a-fA-F]{7,40}(?![0-9A-Za-z])")
 
 
 def test_fixture_metadata_names_no_commit():
     """Fixture metadata describe the reference in words.
 
-    A commit of the private research code cannot be resolved by a reader.
+    A commit of its private repository cannot be resolved by a reader.
     """
     for path in sorted(FIXTURES.glob("*/*.json")):
         meta = json.loads(path.read_text())["meta"]

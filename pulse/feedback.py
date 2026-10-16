@@ -53,8 +53,8 @@ class Arm:
     Feedback arms always use the descriptor settings of the published
     runs: generated rows carry the laws they were drawn from, and rows
     before the origin carry teacher-forced laws (see `RolloutFeedback`).
-    The research driver's own defaults were point descriptors and no
-    prefix descriptors; those settings are not provided here.
+    The reference implementation's driver defaulted to point descriptors
+    and no prefix descriptors; those settings are not provided here.
     """
 
     weights: str

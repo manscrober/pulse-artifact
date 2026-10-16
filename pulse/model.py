@@ -400,13 +400,13 @@ def build_policy(protocol: Protocol) -> Policy:
 #           adapters.*, probability_adapters.*       unchanged
 
 
-def research_policy_state(state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+def reference_policy_state(state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     if not all(k.startswith("model.model.") for k in state):
         raise ValueError("not a reference policy state")
     return {k.removeprefix("model.model."): v for k, v in state.items()}
 
 
-def research_pulse_state(state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+def reference_pulse_state(state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     if not any(k.startswith("pulse.model.") for k in state):
         raise ValueError("not a reference PULSE state")
     return {("pulse." + k.removeprefix("pulse.model.") if k.startswith("pulse.model.") else k): v
@@ -435,4 +435,4 @@ def read_reference_state(path) -> dict[str, torch.Tensor]:
     one unpickles arbitrary objects: use it only on files of known origin.
     """
     state = torch.load(path, map_location="cpu", weights_only=False)["model"]
-    return research_policy_state(state) if next(iter(state)).startswith("model.model.") else research_pulse_state(state)
+    return reference_policy_state(state) if next(iter(state)).startswith("model.model.") else reference_pulse_state(state)

@@ -25,7 +25,7 @@ def test_pulse_key_map(tmp_path):
     reference = {"pulse.model." + k: v for k, v in pulse.state_dict().items()}
     reference["pulse.model.encoders.0.residual_gate_heads.0.weight"] = torch.zeros(1, 64)
     reference["adapters.0.net.0.bias"] = torch.ones(64)
-    mapped = M.research_pulse_state(reference)
+    mapped = M.reference_pulse_state(reference)
     assert mapped["adapters.0.net.0.bias"] is reference["adapters.0.net.0.bias"]
     assert not any("residual_gate" in k for k in mapped)
     fresh = M.pulse_model(protocol())
@@ -53,7 +53,7 @@ def test_reference_names_load_strictly():
     keys = json.loads((Path(__file__).parent / "fixtures" / "reference_keys.json").read_text())
     pulse, policy = M.pulse_model(protocol()), M.build_policy(protocol())
     reference = {k: torch.zeros(shape) for k, shape in keys["policy"].items()}
-    policy.load_state_dict(M.research_policy_state(reference), strict=True)
+    policy.load_state_dict(M.reference_policy_state(reference), strict=True)
     reference = {k: torch.zeros(shape) for k, shape in keys["pulse"].items()}
-    mapped = M.research_pulse_state(reference)
+    mapped = M.reference_pulse_state(reference)
     pulse.load_state_dict({k.removeprefix("pulse."): v for k, v in mapped.items()}, strict=True)

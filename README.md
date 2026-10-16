@@ -200,10 +200,10 @@ and the continuous laws are conditioned on that draw; the single-pass
 published sampled-history run did. Descriptor arms always use the settings
 of the published runs: generated rows carry the laws they were drawn from,
 and rows before the origin carry the laws that teacher forcing gives them.
-The research code that produced the paper offered other descriptor
-settings as defaults (point descriptors and no descriptors before the
-origin); those were not used for the published results and are not
-provided here.
+The reference implementation that produced the paper offered other
+descriptor settings as defaults (point descriptors and no descriptors
+before the origin); those were not used for the published results and are
+not provided here.
 
 ## Scoring
 
