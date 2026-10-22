@@ -219,6 +219,11 @@ class GroupedModel(nn.Module):
         self.register_buffer("cont_means", torch.zeros(nv))
         self.register_buffer("cont_stds", torch.ones(nv))
 
+    @property
+    def head(self) -> str:
+        """The kind of the continuous heads (`pulse.heads`)."""
+        return self.architecture.head
+
     def set_normalization(self, mean, sd) -> None:
         self.cont_means.copy_(torch.as_tensor(mean, dtype=torch.float32))
         self.cont_stds.copy_(torch.as_tensor(sd, dtype=torch.float32))

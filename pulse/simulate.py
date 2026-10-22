@@ -21,6 +21,11 @@ times per patient. Each hour:
 
 The forecast origin `k` is the paper's: the first generated hour is hour
 `k` (one-based), so the last recorded row is `data.last_recorded_row(k)`.
+
+The G-Transformer baseline (`pulse.gtransformer`) differs in step 1: it
+reads the hourly rows generated so far, the form it is trained on, and the
+binary outcomes it draws for its own later encoders become the next hour's
+outcomes.
 """
 from __future__ import annotations
 
@@ -37,6 +42,7 @@ from pulse.data import Part, case_path, first_forecast_row, last_recorded_row, s
 # ARMS is defined with the feedback it describes; the command line and the
 # README also reach it as pulse.simulate.ARMS.
 from pulse.feedback import ARMS, Arm, FeedbackPULSE, RolloutFeedback
+from pulse.gtransformer import GTransformer
 from pulse.model import Policy
 
 STEP_HOURS = 1.0  # length of one generated step
@@ -97,7 +103,7 @@ def _draw(core, out: dict, noise: tuple[torch.Tensor, torch.Tensor] | None) -> t
     back. The Gaussian and the point head are drawn in physical units from
     a location and a standard deviation, which rounds differently.
     """
-    kind, primary = core.architecture.head, core.output_indices
+    kind, primary = core.head, core.output_indices
     if kind in ("mog2",) + H.FLOWS:
         params = H.stack(kind, out["dist_params_list"], index=0)
         return core.denormalize(H.sample(kind, params).unsqueeze(1), primary).squeeze(1)
@@ -255,7 +261,7 @@ def _next_binaries(core, arm: Arm, x: dict, logits: torch.Tensor, history: _Even
 
 
 @torch.no_grad()
-def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int, paths: int, *,
+def rollout(model: FeedbackPULSE | GTransformer, policy: Policy, arm: Arm, batch: Part, k: int, paths: int, *,
             noise: tuple[torch.Tensor, torch.Tensor] | None = None,
             policy_at_last_event: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
     """Generate the hours after forecast origin `k`, from row `first_forecast_row(k)` on.
@@ -263,11 +269,15 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
     `noise` is the static noise of a point head (`static_noise`). With
     `policy_at_last_event` the policy's output is read at the last row of
     each event history; otherwise at the last of the 24 padded rows, as in
-    the runs published before 19 October. Returns continuous [N, P, T, V]
-    and binary [N, P, T, K].
+    the runs published before 19 October. A G-Transformer rolls out with
+    the `sample` arm only. Returns continuous [N, P, T, V] and binary
+    [N, P, T, K].
     """
-    core = pulse.pulse
-    pulse.eval()
+    gtransformer = isinstance(model, GTransformer)
+    if gtransformer and arm != ARMS["sample"]:
+        raise ValueError("the G-Transformer rolls out with the sample arm only")
+    core = model if gtransformer else model.pulse
+    model.eval()
     policy.eval()
     n, steps, nv = batch["continuous"].shape
     rows_total = n * paths
@@ -280,7 +290,7 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
     baseline = cont[:, 0].clone()
     history = _EventHistory(cont, binary, keep, times, k)
     table = sobol_table(paths, cont.device) if arm.sobol else None
-    feedback = (RolloutFeedback(pulse, rows_total, steps, quantiles=arm.quantiles, probabilities=arm.probabilities,
+    feedback = (RolloutFeedback(model, rows_total, steps, quantiles=arm.quantiles, probabilities=arm.probabilities,
                                 mean_state=arm.mean_state) if arm.feedback else None)
     path_of_row = torch.arange(rows_total, device=cont.device) % paths
 
@@ -292,14 +302,19 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
     last = last_recorded_row(k)
     for t in range(last, steps - 1):
         model_input = history.model_input(static)
-        if feedback is not None:
-            if t == last:
-                feedback.prefix(model_input, policy, first_forecast_row(k))
-            model_input["continuous"] = feedback.history_values(history.continuous)
-        x = core.inputs(model_input)
-        additions = None if feedback is None else feedback.additions()
-        logits = core.binary_logits(x, additions)
-        out, next_outcomes, bin_probs = _next_binaries(core, arm, x, logits, history, uniforms, t, additions)
+        if gtransformer:
+            hourly = {"continuous": cont[:, :t + 1], "binary": binary[:, :t + 1], "static": static}
+            out = core.next_outputs(hourly)
+            next_outcomes, bin_probs = out["bin_samples"][:, 0, :], out["bin_probs"][:, 0, :]
+        else:
+            if feedback is not None:
+                if t == last:
+                    feedback.prefix(model_input, policy, first_forecast_row(k))
+                model_input["continuous"] = feedback.history_values(history.continuous)
+            x = core.inputs(model_input)
+            additions = None if feedback is None else feedback.additions()
+            logits = core.binary_logits(x, additions)
+            out, next_outcomes, bin_probs = _next_binaries(core, arm, x, logits, history, uniforms, t, additions)
 
         obs_probs = torch.sigmoid(out["obs_logits"][:, 0, :]).clamp(1e-6, 1.0 - 1e-6)
         observed = torch.rand_like(obs_probs) < obs_probs
@@ -367,8 +382,8 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
     return cont.view(n, paths, steps, nv), binary.view(n, paths, steps, -1)
 
 
-def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int, paths: int, out: Path,
-             per_call: int = PER_CALL, provenance: dict[str, str] | None = None, *,
+def evaluate(model: FeedbackPULSE | GTransformer, policy: Policy, arm: Arm, test: Part, k: int, paths: int,
+             out: Path, per_call: int = PER_CALL, provenance: dict[str, str] | None = None, *,
              noise: tuple[torch.Tensor, torch.Tensor] | None = None, policy_at_last_event: bool = False) -> None:
     """Roll out every test patient and write one case file each.
 
@@ -405,7 +420,7 @@ def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int,
             continue
         torch.manual_seed(SEED + 1000 * k + first)
         batch = {key: value[first:ids[-1] + 1] for key, value in test.items()}
-        cont, binary = rollout(pulse, policy, arm, batch, k, paths, noise=noise,
+        cont, binary = rollout(model, policy, arm, batch, k, paths, noise=noise,
                                policy_at_last_event=policy_at_last_event)
         for offset, i in enumerate(ids):
             save_case(out, i, cont[offset], binary[offset])

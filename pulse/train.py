@@ -25,6 +25,10 @@ The policy loss is the squared error of the next bolus volume in training
 standard deviations, averaged over recorded entries, plus the cross-entropy
 of the next vasopressor indicator.
 
+The G-Transformer baseline (`pulse.gtransformer`) trains as the phase
+`gtransformer`, outside the published phases, with the loss of a point
+head; it does not read the policy.
+
 Optimisation: Adam (learning rate 1e-3 for the policy, 5e-4 otherwise), the
 rate multiplied by 0.3 after half of the epochs, gradients clipped at norm
 one, batches of 32 patients in microbatches of 8, at most 50 epochs, early
@@ -43,6 +47,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from pulse import gtransformer as G
 from pulse import heads as H
 from pulse import model as M
 from pulse import variables as V
@@ -50,6 +55,7 @@ from pulse.data import Part, Prepared, Protocol
 from pulse.feedback import ARMS, Arm, FeedbackPULSE, build_pulse, generator_states, restore_generators
 
 PHASES = ("policy", "sample", "distribution", "quantile_only", "probability_only")
+BASELINE = "gtransformer"
 WAIT_WEIGHT = 0.05
 WAIT_CENSOR_HOURS = 48.0
 # Seed of the epoch order. The reference used 724 here, for model
@@ -105,16 +111,18 @@ def _hours_to_next_record(recorded: torch.Tensor, hours: torch.Tensor) -> torch.
     return waits
 
 
-def pulse_loss(pulse: FeedbackPULSE, batch: Part, arm: Arm) -> torch.Tensor:
-    core = pulse.pulse
+def pulse_loss(model: FeedbackPULSE | G.GTransformer, batch: Part, arm: Arm) -> torch.Tensor:
     history = {k: batch[k] for k in ("continuous", "binary", "static", "time_hours", "continuous_mask")}
-    out = pulse(history, quantiles=arm.quantiles, probabilities=arm.probabilities)
+    if isinstance(model, G.GTransformer):
+        core, out = model, model(history)
+    else:
+        core, out = model.pulse, model(history, quantiles=arm.quantiles, probabilities=arm.probabilities)
     idx = core.output_indices
     target = core.normalize(batch["continuous_target"])[:, 1:, idx]
     recorded = batch["continuous_mask"][:, 1:, idx]
     ordinal = torch.tensor([core.continuous_names[i] in V.ORDINAL for i in idx], device=target.device).view(1, 1, -1)
 
-    kind = core.architecture.head
+    kind = core.head
     if kind == "point":
         loss = ((target - out["mu"][:, :-1]) ** 2 * recorded).sum() / (recorded.sum() + 1e-8)
     else:
@@ -153,7 +161,7 @@ def batch_loss(model, part: Part, ids: np.ndarray, phase: str, device) -> torch.
     batch = {k: v[ids].to(device) for k, v in part.items()}
     if phase == "policy":
         return policy_loss(model, batch)
-    return pulse_loss(model, batch, ARMS[phase])
+    return pulse_loss(model, batch, ARMS["sample" if phase == BASELINE else phase])
 
 
 # MPS attention dropout ------------------------------------------------------
@@ -205,6 +213,8 @@ def build(phase: str, prepared: Prepared, policy: M.Policy | None,
     """A freshly seeded model for `phase`; PULSE phases read the frozen `policy`."""
     if phase == "policy":
         return M.build_policy(prepared.protocol)
+    if phase == BASELINE:
+        return G.build_gtransformer(prepared.protocol, prepared.train["binary"])
     if policy is None:
         raise ValueError(f"phase {phase} needs the trained policy")
     model = build_pulse(prepared.protocol, prepared.train["binary"], architecture)
@@ -281,7 +291,7 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     it yields different weights. The tests check the procedure bitwise
     against the reference implementation on the CPU.
     """
-    if phase not in PHASES:
+    if phase not in PHASES + (BASELINE,):
         raise ValueError(f"unknown phase {phase}")
     protocol = Path(out) / "protocol.json"
     if protocol.exists() and Protocol.load(protocol) != prepared.protocol:

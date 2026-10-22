@@ -21,6 +21,12 @@ settings of the published baseline: point predictions trained by squared
 error, no learned variance. Its encoders take no padding mask, so the
 prediction for the next hour is read from a row the caller names
 (`next_outputs`).
+
+`pulse.train` fits it as the phase `gtransformer` with the loss of the
+point rows of the component table, and `pulse.simulate.rollout` rolls it
+out with the plain `sample` arm. In a rollout it reads the hourly rows
+generated so far, the form it is trained on, while the policy reads the
+event history as for PULSE.
 """
 from __future__ import annotations
 
@@ -89,6 +95,9 @@ class GTransformer(nn.Module):
     [B, T, 36]; row t predicts hour t + 1.
     """
 
+    # The prediction is a point; rollouts add the static noise of `pulse.simulate.static_noise`.
+    head = "point"
+
     def __init__(self, *, width: int = 64, layers: int = 2, heads: int = 4, dropout: float = 0.1,
                  observation: bool = True):
         super().__init__()
@@ -137,7 +146,8 @@ class GTransformer(nn.Module):
         earlier variables at the hour it predicts. Otherwise it reads the
         predictions of the earlier encoders: the predicted value of a
         continuous variable and, for a binary one, a draw from its
-        probability with `sample_binary` or the probability itself.
+        probability with `sample_binary` (kept in `draws`) or the
+        probability itself.
         """
         b, t, _ = continuous.shape
         norm = self.normalize(continuous)
@@ -151,7 +161,7 @@ class GTransformer(nn.Module):
             recorded = torch.stack([norm[..., self.continuous_names.index(n)] if n in self.outputs
                                     else binary[..., self.binary_names.index(n)] for n in self.order], dim=-1)
             recorded = torch.cat([recorded[:, 1:, :], recorded[:, -1:, :]], dim=1)
-        out = {"values": {}, "obs_logits": {}, "logits": {}, "probs": {}}
+        out = {"values": {}, "obs_logits": {}, "logits": {}, "probs": {}, "draws": {}}
         predicted = []
         for i, name in enumerate(self.order):
             parts = [treatments, history]
@@ -163,8 +173,11 @@ class GTransformer(nn.Module):
                 probs = F.softmax(o["logits"], dim=-1)
                 out["logits"][name], out["probs"][name] = o["logits"], probs
                 positive = probs[..., 1]
-                predicted.append((torch.rand_like(positive) < positive).float()
-                                 if not teacher_forcing and sample_binary else positive)
+                if not teacher_forcing and sample_binary:
+                    out["draws"][name] = (torch.rand_like(positive) < positive).float()
+                    predicted.append(out["draws"][name])
+                else:
+                    predicted.append(positive)
             else:
                 out["values"][name] = o["value"]
                 if o["obs_logit"] is not None:
@@ -185,10 +198,11 @@ class GTransformer(nn.Module):
     def next_outputs(self, history: dict[str, torch.Tensor], rows: torch.Tensor | None = None) -> dict:
         """Predictions for the next hour of each history, without teacher forcing.
 
-        Binary predictions are drawn for the later encoders as in a rollout.
-        `rows` [B] names the row of each history to read; None reads the
-        last row of the tensor, which is what the reference did for padded
-        event histories too (issue G1 of the port tracker).
+        Binary predictions are drawn for the later encoders as in a rollout;
+        `bin_samples` holds those draws, which a rollout takes as the next
+        hour's outcomes. `rows` [B] names the row of each history to read;
+        None reads the last row of the tensor, which is what the reference
+        did for padded event histories too (issue G1 of the port tracker).
         """
         cont = history["continuous"]
         out = self.run(cont, history["binary"], history["static"], teacher_forcing=False, sample_binary=True)
@@ -204,13 +218,15 @@ class GTransformer(nn.Module):
         for i, name in enumerate(self.binary_outputs):
             logits[:, :, i] = out["logits"][name][..., 1] - out["logits"][name][..., 0]
             probs[:, :, i] = out["probs"][name][..., 1]
+        draws = torch.stack([out["draws"][n] for n in self.binary_outputs], dim=-1)
 
         def read(x):
             if x is None:
                 return None
             return x[:, -1:, :] if rows is None else x[torch.arange(b, device=x.device), rows].unsqueeze(1)
         return {"mu": read(mu), "log_var": None, "bin_logits": read(logits), "bin_probs": read(probs),
-                "obs_logits": read(obs)}
+                "bin_samples": read(draws), "obs_logits": read(obs), "delta_t_hours": None,
+                "dist_params_list": None}
 
 
 def gtransformer_model(protocol) -> GTransformer:
