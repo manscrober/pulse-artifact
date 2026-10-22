@@ -137,3 +137,50 @@ def test_fit_copies_the_given_protocol(tmp_path):
     settings = T.Settings(epochs=1, batch=BATCH, micro=MICRO, patience=1, min_epochs=1)
     T.fit("policy", data, None, tmp_path / "out", "cpu", settings)
     assert (tmp_path / "out" / "protocol.json").read_bytes() == shipped.read_bytes()
+
+
+class Interrupted(Exception):
+    pass
+
+
+def interrupt_at(monkeypatch, call: int) -> None:
+    """Stop the fit before its `call`-th update, after a continuation is saved at every update."""
+    update, calls = T.update, []
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == call:
+            raise Interrupted
+        return update(*args, **kwargs)
+
+    monkeypatch.setattr(T, "CONTINUATION_SECONDS", 0.0)
+    monkeypatch.setattr(T, "update", counted)
+
+
+@pytest.mark.parametrize("phase", ["policy", "sample", T.BASELINE])
+@pytest.mark.parametrize("call", [2, 3, 6])
+def test_fit_continues_where_it_stopped(phase, call, tmp_path, monkeypatch):
+    """Stopped within the first epoch (call 2), at the start of the second (3) or within the third (6)."""
+    settings = T.Settings(epochs=4, batch=BATCH, micro=MICRO, patience=1, min_epochs=2)
+    policy = None if phase == "policy" else frozen_policy()
+    whole = T.fit(phase, prepared(), policy, tmp_path / "whole", "cpu", settings)
+    with monkeypatch.context() as patch:
+        interrupt_at(patch, call)
+        with pytest.raises(Interrupted):
+            T.fit(phase, prepared(), policy, tmp_path / "parts", "cpu", settings)
+    assert (tmp_path / "parts" / f"{phase}.continue.pt").exists()
+    torch.manual_seed(1)  # the continuation restores the generators
+    parts = T.fit(phase, prepared(), policy, tmp_path / "parts", "cpu", settings)
+    assert parts["history"] == whole["history"]
+    assert all(torch.equal(v, whole["model"].state_dict()[k]) for k, v in parts["model"].state_dict().items())
+    assert not (tmp_path / "parts" / f"{phase}.continue.pt").exists()
+
+
+def test_fit_refuses_the_continuation_of_another_fit(tmp_path, monkeypatch):
+    settings = T.Settings(epochs=3, batch=BATCH, micro=MICRO, patience=1, min_epochs=2)
+    with monkeypatch.context() as patch:
+        interrupt_at(patch, 2)
+        with pytest.raises(Interrupted):
+            T.fit("policy", prepared(), None, tmp_path, "cpu", settings)
+    with pytest.raises(ValueError, match="continues another fit"):
+        T.fit("policy", prepared(), None, tmp_path, "cpu", T.Settings(epochs=4, batch=BATCH, micro=MICRO))

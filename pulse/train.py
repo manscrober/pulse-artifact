@@ -39,8 +39,9 @@ from __future__ import annotations
 
 import contextlib
 import math
+import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -58,6 +59,8 @@ PHASES = ("policy", "sample", "distribution", "quantile_only", "probability_only
 BASELINE = "gtransformer"
 WAIT_WEIGHT = 0.05
 WAIT_CENSOR_HOURS = 48.0
+# A fit in progress is saved for continuation after every epoch and at least this often.
+CONTINUATION_SECONDS = 120.0
 # Seed of the epoch order. The reference used 724 here, for model
 # construction (`model.SEED`) and for the choice of training patients
 # (`data.SELECTION_SEED`); they are separate seeds that share a value.
@@ -285,6 +288,15 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     command line prints it. `architecture` chooses the PULSE variant of
     the component table (`pulse.model.Architecture`).
 
+    While a fit runs, `<out>/<phase>.continue.pt` holds what it needs to
+    go on: weights, optimiser, schedule, random generators, the position
+    in the epoch, the validation history and the best weights so far. It
+    is written after every epoch and at least every `CONTINUATION_SECONDS`
+    within one, and removed once `<phase>.pt` is written. A fit with the
+    same phase, settings, architecture, protocol and device type continues
+    from it, and any other fit is refused. On the CPU a fit that is
+    stopped and continued gives the weights of one that is not.
+
     The published weights were trained on a CUDA device. Training on the
     CPU or on Apple MPS follows the same procedure, data order and
     stopping rule, but floating-point results differ between devices, so
@@ -300,6 +312,48 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
         return _fit(phase, prepared, policy, Path(out), device, settings, on_epoch, architecture)
 
 
+@dataclass
+class _Progress:
+    """The next epoch and update of a fit, its validation history and its best weights so far."""
+
+    epoch: int = 0
+    step: int = 0
+    updates: int = 0
+    history: list[dict] = field(default_factory=list)
+    best: float = float("inf")
+    best_state: dict[str, torch.Tensor] | None = None
+
+
+def _exhausted(history: list[dict], settings: Settings) -> bool:
+    """Whether `patience` epochs have passed without a better validation loss, once `min_epochs` have run."""
+    if not history or len(history) < settings.min_epochs:
+        return False
+    since_best = len(history) - 1 - int(np.argmin([h["validation_loss"] for h in history]))
+    return since_best >= settings.patience
+
+
+def _save_continuation(path: Path, identity: dict, progress: _Progress, model, optimizer, scheduler,
+                       device: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pending = path.with_suffix(".pending")
+    torch.save({"identity": identity, "progress": asdict(progress),
+                "model": {k: v.detach().cpu().clone() for k, v in model.state_dict().items()},
+                "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict(),
+                "generators": generator_states(torch.device(device))}, pending)
+    pending.replace(path)
+
+
+def _continue(path: Path, identity: dict, model, optimizer, scheduler, device: str) -> _Progress:
+    saved = torch.load(path, map_location="cpu", weights_only=True)
+    if saved["identity"] != identity:
+        raise ValueError(f"{path} continues another fit; remove it to start this one")
+    model.load_state_dict(saved["model"])
+    optimizer.load_state_dict(saved["optimizer"])
+    scheduler.load_state_dict(saved["scheduler"])
+    restore_generators(saved["generators"], torch.device(device))
+    return _Progress(**saved["progress"])
+
+
 def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str,
          settings: Settings, on_epoch: Callable[[dict], None] | None, architecture: M.Architecture) -> dict:
     if policy is not None:
@@ -308,40 +362,49 @@ def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, dev
     optimizer, scheduler = optimiser(model, phase, settings.epochs)
     patients = len(prepared.train["continuous"])
     updates_per_epoch = math.ceil(patients / settings.batch)
-    best, best_state, history, updates = float("inf"), None, [], 0
+    continuation = out / f"{phase}.continue.pt"
+    identity = {"phase": phase, "settings": asdict(settings), "architecture": asdict(architecture),
+                "cache_sha256": prepared.protocol.cache_sha256, "device": torch.device(device).type}
+    progress = (_continue(continuation, identity, model, optimizer, scheduler, device) if continuation.exists()
+                else _Progress())
 
-    def exhausted() -> bool:
-        if not history or len(history) < settings.min_epochs:
-            return False
-        since_best = len(history) - 1 - int(np.argmin([h["validation_loss"] for h in history]))
-        return since_best >= settings.patience
+    def save() -> float:
+        _save_continuation(continuation, identity, progress, model, optimizer, scheduler, device)
+        return time.monotonic()
 
     model.train()
-    for epoch in range(settings.epochs):
-        if exhausted():
+    saved = time.monotonic()
+    for epoch in range(progress.epoch, settings.epochs):
+        if _exhausted(progress.history, settings):
             break
         order = epoch_order(epoch, patients)
-        for step in range(updates_per_epoch):
+        for step in range(progress.step, updates_per_epoch):
             ids = order[step * settings.batch:min((step + 1) * settings.batch, patients)]
             update(model, optimizer, prepared.train, ids, phase, settings.micro, device)
-            updates += 1
+            progress.step, progress.updates = step + 1, progress.updates + 1
+            if time.monotonic() - saved >= CONTINUATION_SECONDS:
+                saved = save()
         loss = validation(model, prepared.val, phase, settings.micro, device)
         if not math.isfinite(loss):
             raise RuntimeError("non-finite validation loss")
-        history.append({"epoch": epoch + 1, "validation_loss": loss, "updates": updates})
+        progress.history.append({"epoch": epoch + 1, "validation_loss": loss, "updates": progress.updates})
         if on_epoch is not None:
-            on_epoch(dict(history[-1]))
-        if loss < best:
-            best, best_state = loss, {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            on_epoch(dict(progress.history[-1]))
+        if loss < progress.best:
+            progress.best = loss
+            progress.best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
         scheduler.step()
+        progress.epoch, progress.step = epoch + 1, 0
+        saved = save()
 
-    model.load_state_dict(best_state)
+    model.load_state_dict(progress.best_state)
     model.eval()
     if phase == "policy":
         for p in model.parameters():
             p.requires_grad_(False)
-    Path(out).mkdir(parents=True, exist_ok=True)
-    prepared.protocol.save(Path(out) / "protocol.json")
-    M.save_checkpoint(Path(out) / f"{phase}.pt", model, history, prepared.protocol.cache_sha256)
-    return {"model": model, "history": history, "validation_loss": best,
-            "stopped_early": len(history) < settings.epochs}
+    out.mkdir(parents=True, exist_ok=True)
+    prepared.protocol.save(out / "protocol.json")
+    M.save_checkpoint(out / f"{phase}.pt", model, progress.history, prepared.protocol.cache_sha256)
+    continuation.unlink(missing_ok=True)
+    return {"model": model, "history": progress.history, "validation_loss": progress.best,
+            "stopped_early": len(progress.history) < settings.epochs}
