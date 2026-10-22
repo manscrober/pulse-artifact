@@ -71,6 +71,9 @@ def _parser() -> argparse.ArgumentParser:
     score.add_argument("--origins", type=int, nargs="+", choices=ORIGINS, default=list(ORIGINS))
     score.add_argument("--resamples", type=int, default=2000)
     score.add_argument("--out", type=Path, required=True, help="JSON file for the scored rows")
+    score.add_argument("--pit", action="store_true", help="add the randomized PIT distance")
+    score.add_argument("--binary-out", type=Path,
+                       help="JSON file for the patient-level binary outcome panel (all paths of each arm)")
     return parser
 
 
@@ -196,10 +199,16 @@ def score(args) -> None:
         arms[label] = (args.rollouts / name, int(limit) if limit else None)
     cache = data.load_cache(args.cache)
     result = scoring.score(arms, cache, data.Protocol.load(args.protocol), origins=tuple(args.origins),
-                           resamples=args.resamples)
+                           resamples=args.resamples, pit=args.pit)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=1) + "\n")
     print(f"{len(result['rows'])} rows -> {args.out}")
+    if args.binary_out:
+        panel = scoring.binary_panel({label: directory for label, (directory, _) in arms.items()}, cache,
+                                     data.Protocol.load(args.protocol), origins=tuple(args.origins))
+        args.binary_out.parent.mkdir(parents=True, exist_ok=True)
+        args.binary_out.write_text(json.dumps(panel, indent=1) + "\n")
+        print(f"{len(panel['rows'])} binary rows -> {args.binary_out}")
 
 
 def main(argv: list[str] | None = None) -> int:

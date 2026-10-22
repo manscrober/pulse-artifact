@@ -93,8 +93,8 @@ def test_score_reads_path_limits_from_labels(monkeypatch, tmp_path):
     monkeypatch.setattr("pulse.data.load_cache", lambda path: "cache")
     monkeypatch.setattr("pulse.data.Protocol.load", lambda path: "protocol")
 
-    def score(arms, cache, protocol, origins, resamples):
-        seen.update(arms=arms, origins=origins, resamples=resamples)
+    def score(arms, cache, protocol, origins, resamples, pit):
+        seen.update(arms=arms, origins=origins, resamples=resamples, pit=pit)
         return {"rows": [{"arm": label} for label in arms]}
 
     monkeypatch.setattr(scoring, "score", score)
@@ -102,8 +102,26 @@ def test_score_reads_path_limits_from_labels(monkeypatch, tmp_path):
     cli.main(["score", "--rollouts", str(tmp_path), "--arms", "sample", "sampled_state:4", "--resamples", "10",
               "--out", str(out)])
     assert seen["arms"] == {"sample": (tmp_path / "sample", None), "sampled_state:4": (tmp_path / "sampled_state", 4)}
-    assert seen["origins"] == (2, 6) and seen["resamples"] == 10
+    assert seen["origins"] == (2, 6) and seen["resamples"] == 10 and not seen["pit"]
     assert json.loads(out.read_text())["rows"][1]["arm"] == "sampled_state:4"
+
+
+def test_score_writes_the_binary_panel_on_request(monkeypatch, tmp_path):
+    seen = {}
+    monkeypatch.setattr("pulse.data.load_cache", lambda path: "cache")
+    monkeypatch.setattr("pulse.data.Protocol.load", lambda path: "protocol")
+    monkeypatch.setattr(scoring, "score", lambda *args, **kwargs: {"rows": []})
+
+    def panel(arms, cache, protocol, origins):
+        seen.update(arms=arms, origins=origins)
+        return {"rows": [1, 2]}
+
+    monkeypatch.setattr(scoring, "binary_panel", panel)
+    out = tmp_path / "binary.json"
+    cli.main(["score", "--rollouts", str(tmp_path), "--arms", "sample:4", "--origins", "6", "--pit",
+              "--out", str(tmp_path / "table.json"), "--binary-out", str(out)])
+    assert seen == {"arms": {"sample:4": tmp_path / "sample"}, "origins": (6,)}
+    assert json.loads(out.read_text())["rows"] == [1, 2]
 
 
 def test_commands_import_without_the_database_driver():

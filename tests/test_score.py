@@ -64,7 +64,14 @@ def test_against_reference(inputs, expected):
         expected(f"k{k}_mask", torch.from_numpy(mask))
         for arm, x in predictions.items():
             expected(f"k{k}_{arm}_paths", torch.from_numpy(x))
-        for key, value in score.patient_statistics(y, mask, predictions, sd).items():
+        for key, value in score.patient_statistics(y, mask, predictions, sd, k).items():
             expected(f"k{k}_{key}", torch.from_numpy(np.ascontiguousarray(value)))
-    result = score.score(arms, cache, protocol, resamples=200)
+    result = score.score(arms, cache, protocol, resamples=200, pit=True)
     expected("rows", as_bytes(result["rows"]))
+    panel = score.binary_panel({arm: d for arm, (d, _) in arms.items()}, cache, protocol, resamples=200)
+    expected("binary_rows", as_bytes(panel["rows"]))
+    expected("binary_channels_by_arm", as_bytes(panel["channels_by_arm"]))
+
+
+def test_primary_rmse_panel_has_25_variables():
+    assert len([v for v in score.PANELS[37] if score.V.CONTINUOUS[v] not in score.RMSE_EXCLUDED]) == 25
