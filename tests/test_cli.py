@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -14,7 +15,8 @@ from pulse import train as T
 
 def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp_path, capsys):
     calls, prepared = [], []
-    monkeypatch.setattr(cli, "_prepare", lambda cache, protocol: prepared.append(cache) or ("prepared", cache))
+    monkeypatch.setattr(cli, "_prepare", lambda cache, protocol: prepared.append(cache) or SimpleNamespace(
+        protocol="protocol"))
 
     def fit(phase, prepared, policy, out, device, settings, on_epoch):
         on_epoch({"epoch": 1, "validation_loss": 0.5, "updates": 2})
@@ -37,6 +39,11 @@ def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp
     with pytest.raises(SystemExit, match="policy.pt is missing"):
         cli.main(["train", "--out", str(tmp_path / "empty"), "--phases", "quantile_only"])
     assert len(calls) == 2 and len(prepared) == 1  # refused lists prepare nothing
+    (tmp_path / "policy.pt").write_text("")
+    monkeypatch.setattr(cli, "_load_policy", lambda directory, protocol: SimpleNamespace(
+        to=lambda device: "saved policy"))
+    cli.main(["train", "--cache", "c.pt", "--out", str(tmp_path), "--phases", T.BASELINE])
+    assert calls[-1][:2] == (T.BASELINE, "saved policy")
 
 
 def test_rollout_names_missing_checkpoints_before_starting(monkeypatch, tmp_path):
@@ -49,31 +56,44 @@ def test_rollout_names_missing_checkpoints_before_starting(monkeypatch, tmp_path
     assert str(refused.value) == f"missing checkpoint files: {tmp_path / 'distribution.pt'}" and not started
 
 
-def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
+class Loaded:
+    """A model that records the checkpoint it was given."""
+
+    def __init__(self, core=None):
+        self.loaded = None
+
+    def load_state_dict(self, name):
+        self.loaded = name
+
+    def to(self, device):
+        return self
+
+
+def fake_rollouts(monkeypatch, tmp_path, files) -> list:
+    """Checkpoint files that exist, prepared data and models that record their loading; returns the rollout calls."""
+    import torch
+
     calls = []
-    for name in ("protocol.json", "policy.pt", "sample.pt", "quantile_only.pt"):
+    for name in ("protocol.json", "policy.pt") + files:
         (tmp_path / "checkpoints" / name).parent.mkdir(exist_ok=True)
         (tmp_path / "checkpoints" / name).write_text("")
     monkeypatch.setattr(cli, "_prepare", lambda cache, protocol: type("P", (), {
-        "test": {"continuous": __import__("torch").zeros(3, 24, 37)}, "protocol": "protocol"})())
-    monkeypatch.setattr(cli, "_load_policy", lambda directory, protocol: __import__("torch").nn.Linear(1, 1))
+        "test": {"continuous": torch.zeros(3, 24, 37)}, "val": "validation part", "protocol": "protocol"})())
+    monkeypatch.setattr(cli, "_load_policy", lambda directory, protocol: torch.nn.Linear(1, 1))
     monkeypatch.setattr(cli, "_checkpoint_state", lambda path, protocol: path.name)
     monkeypatch.setattr(cli, "_file_sha256", lambda path: "digest of " + path.name)
     monkeypatch.setattr("pulse.model.pulse_model", lambda protocol: None)
+    monkeypatch.setattr("pulse.feedback.FeedbackPULSE", Loaded)
+    monkeypatch.setattr("pulse.gtransformer.gtransformer_model", lambda protocol: Loaded())
+    monkeypatch.setattr(S, "static_noise", lambda part: ("static noise of", part))
+    monkeypatch.setattr(S, "evaluate", lambda model, policy, arm, test, k, paths, out, per_call, provenance, noise,
+                        policy_at_last_event: calls.append((model.loaded, arm, k, paths, out, per_call, provenance,
+                                                            noise, policy_at_last_event)))
+    return calls
 
-    class Pulse:
-        def __init__(self, core):
-            self.loaded = None
 
-        def load_state_dict(self, name):
-            self.loaded = name
-
-        def to(self, device):
-            return self
-
-    monkeypatch.setattr("pulse.feedback.FeedbackPULSE", Pulse)
-    monkeypatch.setattr(S, "evaluate", lambda pulse, policy, arm, test, k, paths, out, per_call, provenance:
-                        calls.append((pulse.loaded, arm, k, paths, out, per_call, provenance)))
+def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
+    calls = fake_rollouts(monkeypatch, tmp_path, ("sample.pt", "quantile_only.pt"))
     cli.main(["rollout", "--checkpoints", str(tmp_path / "checkpoints"), "--arms", "sample", "quantile_only",
               "--paths", "4", "--out", str(tmp_path)])
     assert [(c[0], c[2], c[4]) for c in calls] == [
@@ -84,8 +104,18 @@ def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
     assert {c[3] for c in calls} == {4} and {c[5] for c in calls} == {S.PER_CALL}
     assert calls[0][6] == {"policy": "digest of policy.pt", "weights": "digest of sample.pt"}
     assert calls[2][6] == {"policy": "digest of policy.pt", "weights": "digest of quantile_only.pt"}
+    assert all(c[7] is None and c[8] is False for c in calls)
     with pytest.raises(SystemExit):
         cli.main(["rollout", "--arms", "unknown"])
+
+
+def test_rollout_of_the_baseline_adds_static_noise(monkeypatch, tmp_path):
+    calls = fake_rollouts(monkeypatch, tmp_path, ("gtransformer.pt",))
+    cli.main(["rollout", "--checkpoints", str(tmp_path / "checkpoints"), "--arms", T.BASELINE, "--origins", "6",
+              "--policy-at-last-event", "--out", str(tmp_path)])
+    assert calls == [("gtransformer.pt", S.ARMS["sample"], 6, 100, tmp_path / T.BASELINE / "k6", S.PER_CALL,
+                      {"policy": "digest of policy.pt", "weights": "digest of gtransformer.pt"},
+                      ("static noise of", "validation part"), True)]
 
 
 def test_score_reads_path_limits_from_labels(monkeypatch, tmp_path):

@@ -151,9 +151,28 @@ and the protocol to `<out>/protocol.json`. Patient-model phases read the
 policy, so `--phases` must name `policy` first when it names it at all;
 without it, they read `policy.pt` from the output directory.
 
+The G-Transformer baseline (`pulse/gtransformer.py`) trains as the phase
+`gtransformer`, which `--phases` must name. It has one causal transformer
+per predicted variable, with the binary outcomes first, and each variable
+is conditioned on the variables before it in the same hour. It uses the
+optimisation above with the loss of a point head: the squared error over
+recorded values, the binary cross-entropy and the cross-entropy of whether
+each variable is recorded.
+
+A fit that stops, for example when a cluster preempts the job, continues
+when the same command is run again. While a phase trains,
+`<out>/<phase>.continue.pt` holds its weights, optimiser, schedule, random
+generators, position in the epoch, validation history and best weights so
+far. It is written after every epoch and at least every two minutes, and
+removed once `<phase>.pt` is written. A continued fit performs the same
+updates as an uninterrupted one, and on the CPU its weights are equal bit
+for bit (the tests check this). A continuation written with other
+settings is refused.
+
 ```
 python -m pulse train --cache cache/sepsis.pt --out runs/checkpoints                  # all five phases
 python -m pulse train --out runs/checkpoints --phases quantile_only --device cuda     # one phase; reads policy.pt
+python -m pulse train --out runs/checkpoints --phases gtransformer --device cuda      # the baseline
 ```
 
 A checkpoint is a dictionary saved with `torch.save` holding the model
@@ -172,11 +191,19 @@ fixed by the origin and its first patient, so a group's paths do not depend
 on which groups ran before it, but they do depend on the group size;
 `--per-call` changes it only for experiments. Before the first arm starts,
 the command checks that `protocol.json`, `policy.pt` and every requested
-arm's checkpoint exist and names any missing file. The settings, together
-with the SHA-256 digests of the policy and arm checkpoint files, go to
-`rollout.json` in each output directory. Rerunning the same command into
-the same directory keeps every complete file, and a directory that holds
-rollouts made with other settings or other checkpoint files is refused.
+arm's checkpoint exist and names any missing file. The arm name
+`gtransformer` rolls out the baseline: each hour it reads the hourly rows
+generated so far, the form it is trained on, the binary outcomes it draws
+become the next hour's, and its point predictions get static Gaussian
+noise fitted to hour-to-hour changes of the validation patients. With
+`--policy-at-last-event` the policy is read at the last row of each event
+history, as in the camera-ready component table; without it, at the last
+of the 24 padded rows, as in the runs published before 19 October. The
+settings, together with the SHA-256 digests of the policy and arm
+checkpoint files, go to `rollout.json` in each output directory. Rerunning
+the same command into the same directory keeps every complete file, and a
+directory that holds rollouts made with other settings or other checkpoint
+files is refused.
 
 The rollout variants are the keys of `pulse.simulate.ARMS`, used unchanged
 in the command line, directory names and scored rows. The table gives the
@@ -505,9 +532,15 @@ tests fail on a release.
   protocol and the files of sampled paths.
 - `pulse/cnf.py` holds the conditional normalising flow of one continuous
   variable: likelihood, sampling, quantiles and the predictive mean.
+- `pulse/heads.py` holds the predictive law of each continuous variable for
+  the component table: point, Gaussian, mixture of two Gaussians, flow and
+  anchored flow.
 - `pulse/model.py` builds the grouped patient model and the treatment
   policy, maps the parameter names of the reference implementation, and
   reads and writes checkpoints.
+- `pulse/rows.py` names the rows of the component table, each a model
+  variant, a rollout arm and the row whose weights it reads.
+- `pulse/gtransformer.py` holds the G-Transformer baseline.
 - `pulse/feedback.py` defines the rollout arms (`ARMS`) and adds the
   distribution history: descriptors of the predicted laws in training and
   during rollouts, and the mean state.

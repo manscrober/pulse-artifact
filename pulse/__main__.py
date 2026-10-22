@@ -39,8 +39,8 @@ def _parser() -> argparse.ArgumentParser:
     train.add_argument("--out", type=Path, default=CHECKPOINTS,
                        help="directory for <phase>.pt and protocol.json")
     train.add_argument("--phases", nargs="+", default=None,
-                       help="phases to train, in order; default: all phases. PULSE phases read the "
-                            "policy, trained here or found in --out")
+                       help="phases to train, in order; default: all PULSE phases. PULSE phases read the "
+                            "policy, trained here or found in --out; gtransformer trains the baseline")
     train.add_argument("--protocol", type=Path, default=None,
                        help="train with the statistics of this protocol (for example the shipped one)")
     train.add_argument("--device", default="cpu", help="cpu, cuda or mps")
@@ -53,12 +53,17 @@ def _parser() -> argparse.ArgumentParser:
     rollout.add_argument("--cache", type=Path, default=CACHE)
     rollout.add_argument("--checkpoints", type=Path, default=CHECKPOINTS,
                          help="directory with protocol.json, policy.pt and the PULSE phases")
-    rollout.add_argument("--arms", nargs="+", required=True, help="names from pulse.simulate.ARMS")
+    rollout.add_argument("--arms", nargs="+", required=True,
+                         help="names from pulse.simulate.ARMS, or gtransformer for the baseline")
     rollout.add_argument("--origins", type=int, nargs="+", choices=ORIGINS, default=list(ORIGINS))
     rollout.add_argument("--paths", type=int, default=100)
     rollout.add_argument("--per-call", type=int, default=None,
                          help="patients per rollout call; paths depend on it. Default: the published 8")
     rollout.add_argument("--out", type=Path, default=ROLLOUTS, help="writes <out>/<arm>/k<origin>/")
+    rollout.add_argument("--policy-at-last-event", action="store_true",
+                         help="read the policy at the last row of the event history, as the component "
+                              "table does; default: at the last padded row, as the runs published "
+                              "before 19 October")
     rollout.add_argument("--device", default="cpu")
 
     score = commands.add_parser("score", formatter_class=from_defaults,
@@ -127,9 +132,10 @@ def train(args) -> None:
     settings = replace(T.Settings(), **{k: v for k, v in (("epochs", args.epochs), ("batch", args.batch),
                                                           ("micro", args.micro)) if v is not None})
     phases = args.phases or list(T.PHASES)
-    unknown = [p for p in phases if p not in T.PHASES]
+    known = list(T.PHASES) + [T.BASELINE]
+    unknown = [p for p in phases if p not in known]
     if unknown:
-        raise SystemExit(f"unknown phases {unknown}; choose from {list(T.PHASES)}")
+        raise SystemExit(f"unknown phases {unknown}; choose from {known}")
     # Patient models read the policy; one trained later in the same call
     # would leave them reading an older policy.pt.
     if "policy" in phases and phases.index("policy") > 0:
@@ -155,16 +161,23 @@ def train(args) -> None:
 
 
 def rollout(args) -> None:
+    from pulse import gtransformer as G
     from pulse import model as M
     from pulse import simulate as S
+    from pulse import train as T
     from pulse.feedback import FeedbackPULSE
 
-    unknown = [a for a in args.arms if a not in S.ARMS]
+    known = list(S.ARMS) + [T.BASELINE]
+    unknown = [a for a in args.arms if a not in known]
     if unknown:
-        raise SystemExit(f"unknown arms {unknown}; choose from {list(S.ARMS)}")
+        raise SystemExit(f"unknown arms {unknown}; choose from {known}")
+
+    def weights(name: str) -> str:
+        return T.BASELINE if name == T.BASELINE else S.ARMS[name].weights
+
     # Every file the arms need is checked before the first arm starts, so a
     # missing checkpoint does not stop a long run halfway.
-    needed = ["protocol.json", "policy.pt"] + sorted({f"{S.ARMS[a].weights}.pt" for a in args.arms})
+    needed = ["protocol.json", "policy.pt"] + sorted({f"{weights(a)}.pt" for a in args.arms})
     missing = [str(args.checkpoints / name) for name in needed if not (args.checkpoints / name).is_file()]
     if missing:
         raise SystemExit("missing checkpoint files: " + ", ".join(missing))
@@ -175,17 +188,21 @@ def rollout(args) -> None:
     per_call = S.PER_CALL if args.per_call is None else args.per_call
     policy_sha256 = _file_sha256(args.checkpoints / "policy.pt")
     for name in args.arms:
-        arm = S.ARMS[name]
-        weights = args.checkpoints / f"{arm.weights}.pt"
-        pulse = FeedbackPULSE(M.pulse_model(protocol))
-        pulse.load_state_dict(_checkpoint_state(weights, protocol))
-        pulse.to(args.device)
+        path = args.checkpoints / f"{weights(name)}.pt"
+        if name == T.BASELINE:
+            # A point head: its paths get the static noise of the validation patients.
+            arm, model, noise = S.ARMS["sample"], G.gtransformer_model(protocol), S.static_noise(prepared.val)
+        else:
+            arm, model, noise = S.ARMS[name], FeedbackPULSE(M.pulse_model(protocol)), None
+        model.load_state_dict(_checkpoint_state(path, protocol))
+        model.to(args.device)
         # The digests tie each rollout directory to the exact checkpoint files,
         # so a rerun with other weights is refused, never mixed in.
-        provenance = {"policy": policy_sha256, "weights": _file_sha256(weights)}
+        provenance = {"policy": policy_sha256, "weights": _file_sha256(path)}
         for origin in args.origins:
             out = args.out / name / f"k{origin}"
-            S.evaluate(pulse, policy, arm, test, origin, args.paths, out, per_call=per_call, provenance=provenance)
+            S.evaluate(model, policy, arm, test, origin, args.paths, out, per_call=per_call, provenance=provenance,
+                       noise=noise, policy_at_last_event=args.policy_at_last_event)
             print(f"{name} origin {origin}: {len(test['continuous'])} cases -> {out}")
 
 
