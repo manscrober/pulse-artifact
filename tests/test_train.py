@@ -1,9 +1,13 @@
+import dataclasses
+
 import numpy as np
 import pytest
 import torch
 
 from pulse import data as D
+from pulse import model as M
 from pulse import train as T
+from pulse.rows import ROWS
 from synthetic import part, perturb, protocol
 
 BATCH, MICRO = 4, 3
@@ -14,7 +18,6 @@ def prepared() -> D.Prepared:
 
 
 def frozen_policy():
-    from pulse import model as M
     policy = M.build_policy(protocol())
     perturb(policy, seed=2)
     policy.eval()
@@ -66,9 +69,20 @@ def test_fit(expected, phase, tmp_path, capsys):
     assert saved["cache_sha256"] == protocol().cache_sha256
     assert D.Protocol.load(tmp_path / "protocol.json") == protocol()
     assert all(torch.equal(saved["state"][k], v) for k, v in result["model"].state_dict().items())
+    # PULSE checkpoints record their variant; the policy records none.
+    assert saved.get("architecture") == (None if phase == "policy" else dataclasses.asdict(M.Architecture()))
     if phase == "policy":
         assert not result["model"].training
         assert not any(p.requires_grad for p in result["model"].parameters())
+
+
+def test_fit_of_a_row_is_saved_under_its_name_with_its_variant(tmp_path):
+    settings = T.Settings(epochs=1, batch=BATCH, micro=MICRO, patience=1, min_epochs=1)
+    T.fit("sample", prepared(), frozen_policy(), tmp_path, "cpu", settings, architecture=ROWS["flow"].architecture,
+          name="flow")
+    saved = torch.load(tmp_path / "flow.pt", weights_only=True)
+    assert saved["architecture"] == dataclasses.asdict(ROWS["flow"].architecture)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["flow.pt", "protocol.json"]
 
 
 def test_waiting_time_targets():
@@ -122,7 +136,6 @@ def test_mps_attention_with_dropout_runs():
 
 
 def test_fit_refuses_another_protocol(tmp_path):
-    import dataclasses
     dataclasses.replace(protocol(), cache_sha256="1" * 64).save(tmp_path / "protocol.json")
     with pytest.raises(ValueError):
         T.fit("policy", prepared(), None, tmp_path)
@@ -130,7 +143,6 @@ def test_fit_refuses_another_protocol(tmp_path):
 
 def test_fit_copies_the_given_protocol(tmp_path):
     """A shipped protocol is written next to the weights as it is, never recomputed."""
-    import dataclasses
     shipped = tmp_path / "shipped.json"
     protocol().save(shipped)
     data = dataclasses.replace(prepared(), protocol=D.Protocol.load(shipped))

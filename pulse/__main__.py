@@ -1,8 +1,9 @@
 """Command line of the PULSE reproduction: `python -m pulse <command>`.
 
     build-cache  bin the sepsis cohort from a MIMIC-IV database into a cache
-    train        train the policy and the PULSE phases on the cache
-    rollout      roll out the test patients for one or more arms
+    train        train the policy, the PULSE phases, the rows of the
+                 component table (`pulse.rows`) or the G-Transformer
+    rollout      roll out the test patients for arms or rows
     score        score saved rollouts against the recorded test values
 
 Each command imports only the modules it needs, so that `build-cache`
@@ -34,13 +35,17 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--out", type=Path, default=CACHE)
 
     train = commands.add_parser("train", formatter_class=from_defaults,
-                                help="train the policy and the PULSE phases")
+                                help="train the policy, the PULSE phases, rows or the baseline")
     train.add_argument("--cache", type=Path, default=CACHE)
     train.add_argument("--out", type=Path, default=CHECKPOINTS,
-                       help="directory for <phase>.pt and protocol.json")
+                       help="directory for <phase>.pt, <row>.pt and protocol.json")
     train.add_argument("--phases", nargs="+", default=None,
-                       help="phases to train, in order; default: all PULSE phases. PULSE phases read the "
-                            "policy, trained here or found in --out; gtransformer trains the baseline")
+                       help="phases to train, in order; default: all PULSE phases, or none with --rows. "
+                            "PULSE phases read the policy, trained here or found in --out; gtransformer "
+                            "trains the baseline")
+    train.add_argument("--rows", nargs="+", default=[],
+                       help="rows of the component table (pulse.rows) to train after the phases, each into "
+                            "<row>.pt; a row that reuses the weights of another row trains that row")
     train.add_argument("--protocol", type=Path, default=None,
                        help="train with the statistics of this protocol (for example the shipped one)")
     train.add_argument("--device", default="cpu", help="cpu, cuda or mps")
@@ -49,30 +54,34 @@ def _parser() -> argparse.ArgumentParser:
     train.add_argument("--micro", type=int, default=None, help="default: the published 8")
 
     rollout = commands.add_parser("rollout", formatter_class=from_defaults,
-                                  help="roll out every test patient for one or more arms")
+                                  help="roll out every test patient for arms or rows")
     rollout.add_argument("--cache", type=Path, default=CACHE)
     rollout.add_argument("--checkpoints", type=Path, default=CHECKPOINTS,
-                         help="directory with protocol.json, policy.pt and the PULSE phases")
-    rollout.add_argument("--arms", nargs="+", required=True,
+                         help="directory with protocol.json, policy.pt and the weights")
+    rollout.add_argument("--arms", nargs="+", default=[],
                          help="names from pulse.simulate.ARMS, or gtransformer for the baseline")
+    rollout.add_argument("--rows", nargs="+", default=[],
+                         help="rows of the component table (pulse.rows), each with its own variant, arm and "
+                              "weights and with the policy read at the last event")
     rollout.add_argument("--origins", type=int, nargs="+", choices=ORIGINS, default=list(ORIGINS))
     rollout.add_argument("--paths", type=int, default=100)
     rollout.add_argument("--per-call", type=int, default=None,
                          help="patients per rollout call; paths depend on it. Default: the published 8")
-    rollout.add_argument("--out", type=Path, default=ROLLOUTS, help="writes <out>/<arm>/k<origin>/")
+    rollout.add_argument("--out", type=Path, default=ROLLOUTS, help="writes <out>/<arm or row>/k<origin>/")
     rollout.add_argument("--policy-at-last-event", action="store_true",
-                         help="read the policy at the last row of the event history, as the component "
-                              "table does; default: at the last padded row, as the runs published "
-                              "before 19 October")
+                         help="for --arms, read the policy at the last row of the event history, as the "
+                              "component table does; default: at the last padded row, as the runs "
+                              "published before 19 October")
     rollout.add_argument("--device", default="cpu")
 
     score = commands.add_parser("score", formatter_class=from_defaults,
-                                help="score saved rollouts; the first arm is the reference")
+                                help="score saved rollouts; the first one named is the reference")
     score.add_argument("--cache", type=Path, default=CACHE)
     score.add_argument("--protocol", type=Path, default=CHECKPOINTS / "protocol.json")
     score.add_argument("--rollouts", type=Path, default=ROLLOUTS)
     score.add_argument("--arms", nargs="+", required=True,
-                       help="ARM or ARM:M, M scoring only the first M paths of that arm's rollouts")
+                       help="rollout directories under --rollouts, each an arm, a row or gtransformer, as NAME "
+                            "or NAME:M, M scoring only the first M paths of its rollouts")
     score.add_argument("--origins", type=int, nargs="+", choices=ORIGINS, default=list(ORIGINS))
     score.add_argument("--resamples", type=int, default=2000)
     score.add_argument("--out", type=Path, required=True, help="JSON file for the scored rows")
@@ -104,13 +113,19 @@ def _load_policy(directory: Path, protocol):
     return _frozen(policy)
 
 
-def _checkpoint_state(path: Path, protocol) -> dict:
-    """The weights of an artifact checkpoint, after checking it was trained on this protocol's cache."""
+def _checkpoint_state(path: Path, protocol, architecture=None) -> dict:
+    """The weights of an artifact checkpoint, after checking it was trained on this protocol's cache
+    and, when `architecture` is given, holds that PULSE variant."""
     import torch
+
+    from pulse.model import Architecture
 
     payload = torch.load(path, map_location="cpu", weights_only=True)
     if payload["cache_sha256"] != protocol.cache_sha256:
         raise ValueError(f"{path} was trained with another protocol than {path.parent / 'protocol.json'}")
+    # A checkpoint that records no variant holds the published PULSE.
+    if architecture is not None and Architecture(**payload.get("architecture", {})) != architecture:
+        raise ValueError(f"{path} holds another PULSE variant than {architecture}")
     return payload["state"]
 
 
@@ -127,15 +142,21 @@ def _file_sha256(path: Path) -> str:
 def train(args) -> None:
     from dataclasses import replace
 
+    from pulse import model as M
     from pulse import train as T
+    from pulse.feedback import ARMS
+    from pulse.rows import ROWS
 
     settings = replace(T.Settings(), **{k: v for k, v in (("epochs", args.epochs), ("batch", args.batch),
                                                           ("micro", args.micro)) if v is not None})
-    phases = args.phases or list(T.PHASES)
+    phases = args.phases or ([] if args.rows else list(T.PHASES))
     known = list(T.PHASES) + [T.BASELINE]
     unknown = [p for p in phases if p not in known]
     if unknown:
         raise SystemExit(f"unknown phases {unknown}; choose from {known}")
+    unknown = [r for r in args.rows if r not in ROWS]
+    if unknown:
+        raise SystemExit(f"unknown rows {unknown}; choose from {list(ROWS)}")
     # Patient models read the policy; one trained later in the same call
     # would leave them reading an older policy.pt.
     if "policy" in phases and phases.index("policy") > 0:
@@ -144,20 +165,26 @@ def train(args) -> None:
     # were trained against the first one.
     if phases.count("policy") > 1:
         raise SystemExit("policy is named more than once in --phases")
-    if phases[0] != "policy" and not (args.out / "policy.pt").is_file():
-        raise SystemExit(f"{args.out / 'policy.pt'} is missing: train the policy first, or add policy to --phases")
+    # Each fit: the name of its checkpoint, its phase and its PULSE variant.
+    fits = [(phase, phase, M.Architecture()) for phase in phases]
+    fits += [(name, ARMS[ROWS[name].arm].weights, ROWS[name].architecture)
+             for name in dict.fromkeys(ROWS[row].weights or row for row in args.rows)]
+    readers = [name for name, phase, _ in fits if phase not in ("policy", T.BASELINE)]
+    if readers and "policy" not in phases and not (args.out / "policy.pt").is_file():
+        raise SystemExit(f"{args.out / 'policy.pt'} is missing: {readers} read the policy; train it first, "
+                         "or add policy to --phases")
     prepared = _prepare(args.cache, args.protocol)
     policy = None
-    for phase in phases:
-        if phase != "policy" and policy is None:
+    for name, phase, architecture in fits:
+        if phase not in ("policy", T.BASELINE) and policy is None:
             policy = _load_policy(args.out, prepared.protocol).to(args.device)
         result = T.fit(phase, prepared, policy, args.out, device=args.device, settings=settings,
-                       on_epoch=lambda entry, phase=phase: print(
-                           f"{phase} epoch {entry['epoch']}: validation loss {entry['validation_loss']:.6f}",
-                           flush=True))
+                       on_epoch=lambda entry, name=name: print(
+                           f"{name} epoch {entry['epoch']}: validation loss {entry['validation_loss']:.6f}",
+                           flush=True), architecture=architecture, name=name)
         if phase == "policy":
             policy = result["model"]
-        print(f"{phase}: best validation loss {result['validation_loss']:.6f} -> {args.out / (phase + '.pt')}")
+        print(f"{name}: best validation loss {result['validation_loss']:.6f} -> {args.out / (name + '.pt')}")
 
 
 def rollout(args) -> None:
@@ -166,18 +193,34 @@ def rollout(args) -> None:
     from pulse import simulate as S
     from pulse import train as T
     from pulse.feedback import FeedbackPULSE
+    from pulse.rows import ROWS
 
+    if not args.arms and not args.rows:
+        raise SystemExit("name the arms, the rows or both")
     known = list(S.ARMS) + [T.BASELINE]
     unknown = [a for a in args.arms if a not in known]
     if unknown:
         raise SystemExit(f"unknown arms {unknown}; choose from {known}")
+    unknown = [r for r in args.rows if r not in ROWS]
+    if unknown:
+        raise SystemExit(f"unknown rows {unknown}; choose from {list(ROWS)}")
 
-    def weights(name: str) -> str:
-        return T.BASELINE if name == T.BASELINE else S.ARMS[name].weights
+    # Each rollout directory: the checkpoint it reads, its arm, its PULSE
+    # variant (None for the baseline) and whether the policy is read at the
+    # last event.
+    plans = {}
+    for name in args.arms:
+        if name == T.BASELINE:
+            plans[name] = (name, S.ARMS["sample"], None, args.policy_at_last_event)
+        else:
+            plans[name] = (S.ARMS[name].weights, S.ARMS[name], M.Architecture(), args.policy_at_last_event)
+    for name in args.rows:
+        row = ROWS[name]
+        plans[name] = (row.weights or name, S.ARMS[row.arm], row.architecture, True)
 
-    # Every file the arms need is checked before the first arm starts, so a
+    # Every file the rollouts need is checked before the first one starts, so a
     # missing checkpoint does not stop a long run halfway.
-    needed = ["protocol.json", "policy.pt"] + sorted({f"{weights(a)}.pt" for a in args.arms})
+    needed = ["protocol.json", "policy.pt"] + sorted({f"{weights}.pt" for weights, *_ in plans.values()})
     missing = [str(args.checkpoints / name) for name in needed if not (args.checkpoints / name).is_file()]
     if missing:
         raise SystemExit("missing checkpoint files: " + ", ".join(missing))
@@ -187,22 +230,24 @@ def rollout(args) -> None:
     policy = _load_policy(args.checkpoints, protocol).to(args.device)
     per_call = S.PER_CALL if args.per_call is None else args.per_call
     policy_sha256 = _file_sha256(args.checkpoints / "policy.pt")
-    for name in args.arms:
-        path = args.checkpoints / f"{weights(name)}.pt"
-        if name == T.BASELINE:
-            # A point head: its paths get the static noise of the validation patients.
-            arm, model, noise = S.ARMS["sample"], G.gtransformer_model(protocol), S.static_noise(prepared.val)
+    for name, (weights, arm, architecture, at_last_event) in plans.items():
+        path = args.checkpoints / f"{weights}.pt"
+        if architecture is None:
+            model = G.gtransformer_model(protocol)
         else:
-            arm, model, noise = S.ARMS[name], FeedbackPULSE(M.pulse_model(protocol)), None
-        model.load_state_dict(_checkpoint_state(path, protocol))
+            model = FeedbackPULSE(M.pulse_model(protocol, architecture))
+        model.load_state_dict(_checkpoint_state(path, protocol, architecture))
         model.to(args.device)
+        # Point heads, the baseline's and those of the first rows, get the
+        # static noise of the validation patients.
+        noise = S.static_noise(prepared.val) if architecture is None or architecture.head == "point" else None
         # The digests tie each rollout directory to the exact checkpoint files,
         # so a rerun with other weights is refused, never mixed in.
         provenance = {"policy": policy_sha256, "weights": _file_sha256(path)}
         for origin in args.origins:
             out = args.out / name / f"k{origin}"
             S.evaluate(model, policy, arm, test, origin, args.paths, out, per_call=per_call, provenance=provenance,
-                       noise=noise, policy_at_last_event=args.policy_at_last_event)
+                       noise=noise, policy_at_last_event=at_last_event)
             print(f"{name} origin {origin}: {len(test['continuous'])} cases -> {out}")
 
 

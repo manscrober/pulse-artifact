@@ -274,8 +274,8 @@ def validation(model, part: Part, phase: str, micro: int, device) -> float:
 
 def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str = "cpu",
         settings: Settings = Settings(), on_epoch: Callable[[dict], None] | None = None,
-        architecture: M.Architecture = M.Architecture()) -> dict:
-    """Train one phase; write the best validation weights to `<out>/<phase>.pt`.
+        architecture: M.Architecture = M.Architecture(), name: str | None = None) -> dict:
+    """Train one phase; write the best validation weights to `<out>/<name>.pt`.
 
     `<out>/protocol.json` receives the protocol, whose cache digest the
     checkpoint also records; a directory holding another protocol is
@@ -286,13 +286,15 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     last-epoch checkpoint. `on_epoch`, when given, receives each
     epoch's entry of the validation history as soon as it is known; the
     command line prints it. `architecture` chooses the PULSE variant of
-    the component table (`pulse.model.Architecture`).
+    the component table (`pulse.model.Architecture`), which a PULSE
+    checkpoint records. `name` defaults to the phase; a row of the
+    component table trains under its own name (`pulse.rows`).
 
-    While a fit runs, `<out>/<phase>.continue.pt` holds what it needs to
+    While a fit runs, `<out>/<name>.continue.pt` holds what it needs to
     go on: weights, optimiser, schedule, random generators, the position
     in the epoch, the validation history and the best weights so far. It
     is written after every epoch and at least every `CONTINUATION_SECONDS`
-    within one, and removed once `<phase>.pt` is written. A fit with the
+    within one, and removed once `<name>.pt` is written. A fit with the
     same phase, settings, architecture, protocol and device type continues
     from it, and any other fit is refused. On the CPU a fit that is
     stopped and continued gives the weights of one that is not.
@@ -309,7 +311,7 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     if protocol.exists() and Protocol.load(protocol) != prepared.protocol:
         raise ValueError(f"{protocol} holds another protocol")
     with mps_attention_dropout() if torch.device(device).type == "mps" else contextlib.nullcontext():
-        return _fit(phase, prepared, policy, Path(out), device, settings, on_epoch, architecture)
+        return _fit(phase, prepared, policy, Path(out), device, settings, on_epoch, architecture, name or phase)
 
 
 @dataclass
@@ -355,14 +357,15 @@ def _continue(path: Path, identity: dict, model, optimizer, scheduler, device: s
 
 
 def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str,
-         settings: Settings, on_epoch: Callable[[dict], None] | None, architecture: M.Architecture) -> dict:
+         settings: Settings, on_epoch: Callable[[dict], None] | None, architecture: M.Architecture,
+         name: str) -> dict:
     if policy is not None:
         policy.to(device)
     model = build(phase, prepared, policy, architecture).to(device)
     optimizer, scheduler = optimiser(model, phase, settings.epochs)
     patients = len(prepared.train["continuous"])
     updates_per_epoch = math.ceil(patients / settings.batch)
-    continuation = out / f"{phase}.continue.pt"
+    continuation = out / f"{name}.continue.pt"
     identity = {"phase": phase, "settings": asdict(settings), "architecture": asdict(architecture),
                 "cache_sha256": prepared.protocol.cache_sha256, "device": torch.device(device).type}
     progress = (_continue(continuation, identity, model, optimizer, scheduler, device) if continuation.exists()
@@ -404,7 +407,8 @@ def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, dev
             p.requires_grad_(False)
     out.mkdir(parents=True, exist_ok=True)
     prepared.protocol.save(out / "protocol.json")
-    M.save_checkpoint(out / f"{phase}.pt", model, progress.history, prepared.protocol.cache_sha256)
+    M.save_checkpoint(out / f"{name}.pt", model, progress.history, prepared.protocol.cache_sha256,
+                      architecture if isinstance(model, FeedbackPULSE) else None)
     continuation.unlink(missing_ok=True)
     return {"model": model, "history": progress.history, "validation_loss": progress.best,
             "stopped_early": len(progress.history) < settings.epochs}

@@ -50,8 +50,8 @@ command lists its options and defaults.
 | command | reads | writes |
 |---|---|---|
 | `build-cache` | the MIMIC-IV database | the cohort cache, `cache/sepsis.pt` |
-| `train` | the cache | `<phase>.pt` and `protocol.json` in `runs/checkpoints` |
-| `rollout` | the cache and the checkpoints | `runs/rollouts/<arm>/k<origin>/case_XXXX.pt` |
+| `train` | the cache | `<phase>.pt`, `<row>.pt` and `protocol.json` in `runs/checkpoints` |
+| `rollout` | the cache and the checkpoints | `runs/rollouts/<arm or row>/k<origin>/case_XXXX.pt` |
 | `score` | the cache, the protocol and the rollouts | one JSON file of scored rows |
 
 ## Data access and the cohort cache
@@ -159,29 +159,45 @@ optimisation above with the loss of a point head: the squared error over
 recorded values, the binary cross-entropy and the cross-entropy of whether
 each variable is recorded.
 
+The rows of the paper's component table (Table 2) are settings of
+`pulse/rows.py` and train with `--rows`. Each row names a PULSE variant
+(`pulse.model.Architecture`: the continuous head, the time encoding, the
+timing head and the event-time inputs), its rollout arm and, when it
+changes only the rollout, the row whose weights it reads. A row trains the
+phase its arm reads with the optimisation above, `sample` for every row
+except the feedback row, which trains `distribution`, and its weights go to
+`<out>/<row>.pt`. The Sobol row reads the weights of the anchor row, so
+naming it trains `anchor.pt`.
+
 A fit that stops, for example when a cluster preempts the job, continues
-when the same command is run again. While a phase trains,
-`<out>/<phase>.continue.pt` holds its weights, optimiser, schedule, random
-generators, position in the epoch, validation history and best weights so
-far. It is written after every epoch and at least every two minutes, and
-removed once `<phase>.pt` is written. A continued fit performs the same
-updates as an uninterrupted one, and on the CPU its weights are equal bit
-for bit (the tests check this). A continuation written with other
-settings is refused.
+when the same command is run again. While a phase or a row trains,
+`<out>/<name>.continue.pt`, named like its checkpoint, holds its weights,
+optimiser, schedule, random generators, position in the epoch, validation
+history and best weights so far. It is written after every epoch and at
+least every two minutes, and removed once the checkpoint is written. A
+continued fit performs the same updates as an uninterrupted one, and on
+the CPU its weights are equal bit for bit (the tests check this). A
+continuation written with other settings is refused.
 
 ```
 python -m pulse train --cache cache/sepsis.pt --out runs/checkpoints                  # all five phases
 python -m pulse train --out runs/checkpoints --phases quantile_only --device cuda     # one phase; reads policy.pt
 python -m pulse train --out runs/checkpoints --phases gtransformer --device cuda      # the baseline
+python -m pulse train --out runs/checkpoints --rows point gaussian flow               # rows; reads policy.pt
 ```
 
 A checkpoint is a dictionary saved with `torch.save` holding the model
 weights (`state`), the validation history of the training run (`history`,
 one entry per epoch with its validation loss and number of updates) and the
-digest of the cache content it was trained on (`cache_sha256`). It is read
-with `pulse.model.read_state`, which loads tensors only (`weights_only=True`),
-and `rollout` refuses a checkpoint whose digest differs from the protocol
-beside it.
+digest of the cache content it was trained on (`cache_sha256`). A PULSE
+checkpoint also records its variant (`architecture`, the fields of
+`pulse.model.Architecture`); one without it holds the published PULSE. It
+is read with `pulse.model.read_state`, which loads tensors only
+(`weights_only=True`), and `rollout` refuses a checkpoint whose digest
+differs from the protocol beside it or whose variant differs from the one
+its arm or row needs. The weights of the flow row and of the anchored flow
+have the same names and shapes, so only the recorded variant tells their
+checkpoints apart.
 
 Rollouts (`python -m pulse rollout`, which calls `pulse.simulate.evaluate`)
 generate the hours after a forecast origin of hour 2 or hour 6 for every
@@ -189,21 +205,24 @@ test patient and write one file of sampled paths per patient and origin.
 Patients are rolled out in groups of 8, and each group draws from a seed
 fixed by the origin and its first patient, so a group's paths do not depend
 on which groups ran before it, but they do depend on the group size;
-`--per-call` changes it only for experiments. Before the first arm starts,
-the command checks that `protocol.json`, `policy.pt` and every requested
-arm's checkpoint exist and names any missing file. The arm name
-`gtransformer` rolls out the baseline: each hour it reads the hourly rows
-generated so far, the form it is trained on, the binary outcomes it draws
-become the next hour's, and its point predictions get static Gaussian
-noise fitted to hour-to-hour changes of the validation patients. With
-`--policy-at-last-event` the policy is read at the last row of each event
-history, as in the camera-ready component table; without it, at the last
-of the 24 padded rows, as in the runs published before 19 October. The
-settings, together with the SHA-256 digests of the policy and arm
-checkpoint files, go to `rollout.json` in each output directory. Rerunning
-the same command into the same directory keeps every complete file, and a
-directory that holds rollouts made with other settings or other checkpoint
-files is refused.
+`--per-call` changes it only for experiments. Before the first rollout
+starts, the command checks that `protocol.json`, `policy.pt` and the
+checkpoint of every requested arm and row exist and names any missing
+file. The arm name `gtransformer` rolls out the baseline: each hour it
+reads the hourly rows generated so far, the form it is trained on, the
+binary outcomes it draws become the next hour's, and its point predictions
+get static Gaussian noise fitted to hour-to-hour changes of the validation
+patients. With `--policy-at-last-event` the policy is read at the last row
+of each event history, as in the camera-ready component table; without
+it, at the last of the 24 padded rows, as in the runs published before 19
+October. `--rows` rolls out rows of the component table, each with its own
+variant, arm and weights, into `<out>/<row>/`; rows always read the policy
+at the last event, and the four rows with a point head get the same static
+noise as the baseline. The settings, together with the SHA-256 digests of
+the policy and weight files, go to `rollout.json` in each output
+directory. Rerunning the same command into the same directory keeps every
+complete file, and a directory that holds rollouts made with other
+settings or other checkpoint files is refused.
 
 The rollout variants are the keys of `pulse.simulate.ARMS`, used unchanged
 in the command line, directory names and scored rows. The table gives the
@@ -254,7 +273,35 @@ The blocks below assume the cache in `cache/sepsis.pt` and checkpoints in
 weights with their `protocol.json`). Each rollout command writes both
 origins.
 
-Table 1, 100 paths per patient against sampled history.
+Table 2 of the camera-ready paper, the cumulative component comparison,
+with its appendix companions: Table A.33 repeats it at origin 2, Table A.34
+gives the paired changes against the row above and Table A.35 the binary
+outcome scores. The commands train the nine weight sets of the ten rows
+into a directory of their own, roll out every row with 100 paths, and
+score the rows in the order of the table, so the point row is the
+reference and every row is also compared with the row above:
+
+```
+python -m pulse train --out runs/rows --phases policy \
+    --rows point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback
+python -m pulse rollout --checkpoints runs/rows --out runs/rows/rollouts --paths 100 \
+    --rows point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback
+python -m pulse score --protocol runs/rows/protocol.json --rollouts runs/rows/rollouts --pit \
+    --arms point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback \
+    --out tables/components.json --binary-out tables/components_binary.json
+```
+
+The eICU column needs the eICU cohort, which this release does not build
+yet.
+**[AUTHOR DECISION PENDING: the expected numbers of Table 2. The text of
+19 October prints runs made before the policy fix of that day. The scorer
+reproduces the scores of the runs after the fix from their saved rollouts:
+the binary outcome panel bit for bit and every aligned score within float64
+rounding (at most 7.6e-16). Add the numbers of the table the paper prints,
+and the eICU commands, before release.]**
+
+Table 1 of the submitted paper, 100 paths per patient against sampled
+history.
 **[AUTHOR DECISION PENDING: the arm set of Table 1. Two published result
 sets are candidates. The published 100-path table, which the scorer
 reproduces bit for bit, holds three arms: `sample`, `distribution` and
@@ -269,8 +316,8 @@ python -m pulse rollout --arms sample ARM ... --paths 100
 python -m pulse score --arms sample ARM ... --out tables/paths100.json
 ```
 
-Table 2, scores with fewer paths, read from the 100-path rollouts of
-`sample`, `distribution` and `sampled_state`; each
+Table 2 of the submitted paper, scores with fewer paths, read from the
+100-path rollouts of `sample`, `distribution` and `sampled_state`; each
 label scores the first `M` paths against the full 100-path sampled
 history, as in the published file:
 
@@ -353,8 +400,9 @@ Origin hour 6:
 | `sampled_state:16` | 0.432 (0.424, 0.441) | 0.433 (0.424, 0.441) | 0.809 (0.802, 0.815) | 3.63 (3.54, 3.72) |
 | `sampled_state:32` | 0.419 (0.412, 0.428) | 0.420 (0.412, 0.428) | 0.797 (0.791, 0.803) | 3.51 (3.43, 3.59) |
 
-Table 3, components of the combined method. The commands below use 16
-paths per patient, the CPU and the default group of 8 patients per call.
+Table 3 of the submitted paper, components of the combined method. The
+commands below use 16 paths per patient, the CPU and the default group of
+8 patients per call.
 **[AUTHOR DECISION PENDING: Table 3 run settings, namely the device, the
 number of patients per rollout call and the number of paths. Replace this
 bracket and the commands below with the settings of the final runs, and
@@ -422,7 +470,10 @@ nine arms for 8 test patients with 100 paths equal those of the reference
 implementation (the quantile-only and probability-only arms with the
 distribution-history weights, as their own published weights were not yet
 available); and so do the first training updates of the policy and of the
-sampled- and distribution-history models.
+sampled- and distribution-history models. With the weights of the component
+table, rollouts of all ten rows for 8 test patients with 100 paths equal
+those of the reference implementation, and on synthetic data so do every
+row's initial weights, outputs and first training updates.
 
 (b) **Published tables from saved rollouts.** The scorer reproduces every
 row of the published 100-path table and of the path-count table from the

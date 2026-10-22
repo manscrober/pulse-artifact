@@ -26,7 +26,7 @@ not predict, and the gate layers drawn and discarded in `Encoder`.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import torch
@@ -448,9 +448,11 @@ def build_policy(protocol: Protocol) -> Policy:
 # Checkpoints -------------------------------------------------------------
 #
 # The artifact saves {"state": state_dict, "history": per-epoch validation
-# losses, "cache_sha256": content digest of the training cache} and reads it
-# without unpickling. Checkpoints of the reference implementation hold the
-# state under "model" with longer names and pickle their configuration; only
+# losses, "cache_sha256": content digest of the training cache} and, for a
+# PULSE model, "architecture": its `Architecture` as a dict; a checkpoint
+# without one holds the published PULSE. It reads them without unpickling.
+# Checkpoints of the reference implementation hold the state under "model"
+# with longer names and pickle their configuration; only
 # `read_reference_state` reads them, mapping the names as follows:
 #
 #   policy  model.model.<rest>                       -> <rest>
@@ -472,13 +474,18 @@ def reference_pulse_state(state: dict[str, torch.Tensor]) -> dict[str, torch.Ten
             for k, v in state.items() if ".residual_gate_heads." not in k}
 
 
-def save_checkpoint(path, model: nn.Module, history: list[dict], cache_sha256: str) -> None:
-    """Weights, validation history and the cache digest of the protocol the model was trained with."""
+def save_checkpoint(path, model: nn.Module, history: list[dict], cache_sha256: str,
+                    architecture: Architecture | None = None) -> None:
+    """Weights, validation history, the cache digest of the protocol the model was trained with and,
+    when given, the PULSE variant."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"state": {k: v.detach().cpu().clone() for k, v in model.state_dict().items()},
+               "history": history, "cache_sha256": cache_sha256}
+    if architecture is not None:
+        payload["architecture"] = asdict(architecture)
     pending = path.with_suffix(".pending")
-    torch.save({"state": {k: v.detach().cpu().clone() for k, v in model.state_dict().items()},
-                "history": history, "cache_sha256": cache_sha256}, pending)
+    torch.save(payload, pending)
     pending.replace(path)
 
 
