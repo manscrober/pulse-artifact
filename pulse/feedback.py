@@ -26,7 +26,7 @@ from torch import nn
 from pulse import cnf
 from pulse import variables as V
 from pulse.data import Protocol
-from pulse.model import SEED, Additions, GroupedModel, Policy, pulse_model
+from pulse.model import SEED, Additions, Architecture, GroupedModel, Policy, pulse_model
 
 PROBABILITIES = (0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95,
                  0.975, 0.99, 0.995, 0.999)
@@ -252,10 +252,15 @@ class FeedbackPULSE(nn.Module):
         return self.pulse(history, additions=self.additions(descriptors, quantiles, probabilities))
 
 
-def build_pulse(protocol: Protocol, train_binary: torch.Tensor) -> FeedbackPULSE:
-    """PULSE as trained: seeded construction, binary heads at training log-odds, then adapters."""
+def build_pulse(protocol: Protocol, train_binary: torch.Tensor,
+                architecture: Architecture = Architecture()) -> FeedbackPULSE:
+    """PULSE as trained: seeded construction, binary heads at training log-odds, then adapters.
+
+    Every model gets the adapters, whether or not its arm reads descriptors,
+    as in the reference, so construction draws the same weights.
+    """
     torch.manual_seed(SEED)
-    core = pulse_model(protocol)
+    core = pulse_model(protocol, architecture)
     core.set_binary_biases(core.binary_initial_logits(train_binary))
     return FeedbackPULSE(core)
 

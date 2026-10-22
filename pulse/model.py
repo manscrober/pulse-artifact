@@ -10,10 +10,13 @@ encoders additionally receive those next-hour binaries and predict the
 next value of their variables. Time enters through a learned encoding of
 the elapsed hours and of the gap since the previous row.
 
-PULSE predicts each continuous variable with the residual CNF of
-`pulse.cnf`, anchored at the variable's last recorded standardised value.
-The policy predicts bolus volume as a point and the vasopressor indicator
-as a logit.
+PULSE predicts each continuous variable with one of the heads of
+`pulse.heads`; the published model uses the residual CNF, anchored at the
+variable's last recorded standardised value. `Architecture` holds the
+switches of the component table: the head, the time encoding, the head
+for the hours until the next record, and the event-time inputs. The
+policy predicts bolus volume as a point and the vasopressor indicator as a
+logit.
 
 Constructing a model draws its initial weights from the global generator,
 so the order of construction below must not change. Two kinds of layers
@@ -23,18 +26,49 @@ not predict, and the gate layers drawn and discarded in `Encoder`.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from pulse import cnf
+from pulse import cnf, heads as H
 from pulse import variables as V
 from pulse.data import Protocol
 
 BINARY_GROUP = "binary_outcomes"
 SEED = 724
+MAX_POSITIONS = 512  # rows of the discrete time embedding
+
+
+@dataclass(frozen=True)
+class Architecture:
+    """Switches of the component table; the defaults are the published PULSE.
+
+    `head` is a kind of `pulse.heads`. `time` is "continuous" (the learned
+    encoding of elapsed hours) or "discrete" (an embedding of the rounded
+    hour). `timing_head` adds a head for the hours until each variable is
+    next recorded; without it a generated hour sits on the one-hour grid.
+    `event_inputs` gives the encoders the recorded-value mask and the log of
+    the hours since each variable was recorded, and zeroes unrecorded
+    values; without them the encoders read the carried-forward values
+    unmarked.
+    """
+
+    head: str = "rescnf"
+    time: str = "continuous"
+    timing_head: bool = True
+    event_inputs: bool = True
+
+    def __post_init__(self):
+        if self.head not in H.KINDS:
+            raise ValueError(f"unknown head {self.head!r}")
+        if self.time not in ("continuous", "discrete"):
+            raise ValueError(f"unknown time encoding {self.time!r}")
+
+
+POLICY_ARCHITECTURE = Architecture(head="point")
 
 # Policy groups: a fixed clinical grouping, then the binary outcome, then the
 # remaining variable (bolus volume) in its own group.
@@ -86,29 +120,34 @@ class TimeEncoding(nn.Module):
 class Encoder(nn.Module):
     """One group: input projection, time encoding, causal transformer and one head per variable.
 
-    `kind` is "binary" (one logit), "cnf" (26 flow parameters) or "point" (one
-    value). Continuous encoders also have heads for the probability that the
-    variable is recorded next hour and for the hours until it is.
+    `kind` is "binary" (one logit) or a head of `pulse.heads`. Continuous
+    encoders also have a head for the probability that the variable is
+    recorded next hour and, with `timing_head`, one for the hours until it is.
     """
 
     def __init__(self, input_dim: int, outputs: list[str], kind: str, width: int, layers: int, heads: int,
-                 dropout: float, gate_draws: bool):
+                 dropout: float, gate_draws: bool, time: str = "continuous", timing_head: bool = True):
         super().__init__()
         self.outputs, self.kind = list(outputs), kind
         self.input_proj = nn.Linear(input_dim, width)
-        self.time_encoder = TimeEncoding(width)
+        if time == "discrete":
+            self.pos_emb = nn.Embedding(MAX_POSITIONS, width)
+        else:
+            self.time_encoder = TimeEncoding(width)
         layer = nn.TransformerEncoderLayer(d_model=width, nhead=heads, dim_feedforward=4 * width,
                                            dropout=dropout, batch_first=True)
         # Padding masks must take the ordinary path on every device.
         self.transformer = nn.TransformerEncoder(layer, num_layers=layers, enable_nested_tensor=False)
         self.heads = nn.ModuleList()
         for _ in self.outputs:
-            head = nn.Linear(width, cnf.NUM_PARAMS if kind == "cnf" else 1)
-            if kind == "cnf":
-                cnf.initialize(head)
+            head = nn.Linear(width, 1 if kind == "binary" else H.num_params(kind))
+            if kind != "binary":
+                H.initialize(kind, head)
             self.heads.append(head)
+        self.timing_head = kind != "binary" and timing_head
         if kind != "binary":
             self.obs_heads = nn.ModuleList([nn.Linear(width, 1) for _ in self.outputs])
+        if self.timing_head:
             self.delta_t_heads = nn.ModuleList([nn.Linear(width, 1) for _ in self.outputs])
         if gate_draws:
             # The reference model builds a gate layer per variable that never
@@ -122,7 +161,13 @@ class Encoder(nn.Module):
         h = self.input_proj(x)
         for term in add:
             h = h + term.to(h.dtype)
-        h = h + self.time_encoder(hours).to(h.dtype)
+        if hasattr(self, "pos_emb"):
+            positions = hours.round().long()
+            if positions.max().item() >= MAX_POSITIONS:
+                raise ValueError(f"hour index beyond the {MAX_POSITIONS} positions of the time embedding")
+            h = h + self.pos_emb(positions).to(h.dtype)
+        else:
+            h = h + self.time_encoder(hours).to(h.dtype)
         return self.transformer(h, mask=mask, src_key_padding_mask=padding, is_causal=True)
 
     def predict(self, h: torch.Tensor) -> dict[str, dict[str, torch.Tensor]]:
@@ -131,6 +176,7 @@ class Encoder(nn.Module):
             out[name] = {"raw": self.heads[i](h)}
             if self.kind != "binary":
                 out[name]["obs_logit"] = self.obs_heads[i](h).squeeze(-1)
+            if self.timing_head:
                 out[name]["delta_t"] = (F.softplus(self.delta_t_heads[i](h)) + 1e-4).squeeze(-1)
         return out
 
@@ -145,9 +191,10 @@ class GroupedModel(nn.Module):
     """
 
     def __init__(self, *, groups: dict[str, list[str]], outputs: list[str], binary_outputs: list[str],
-                 cnf_heads: bool, gate_draws: bool, static_dim: int = len(V.STATIC), width: int = 64,
+                 architecture: Architecture, gate_draws: bool, static_dim: int = len(V.STATIC), width: int = 64,
                  layers: int = 2, heads: int = 4, dropout: float = 0.1):
         super().__init__()
+        self.architecture = architecture
         self.continuous_names, self.binary_names = list(V.CONTINUOUS), list(V.BINARY)
         self.outputs, self.binary_outputs = list(outputs), list(binary_outputs)
         self.output_indices = [self.continuous_names.index(n) for n in self.outputs]
@@ -157,16 +204,17 @@ class GroupedModel(nn.Module):
         self.group_names = list(groups)
         self.binary_group = self.group_names.index(BINARY_GROUP)
         nv, nk = len(self.continuous_names), len(self.binary_names)
-        history_dim = nv + nk + len(V.TREATMENTS) + 2 * nv
+        history_dim = nv + nk + len(V.TREATMENTS) + (2 * nv if architecture.event_inputs else 0)
+        a = architecture
         self.encoders = nn.ModuleList()
         for name in self.group_names:
             if name == BINARY_GROUP:
                 encoder = Encoder(history_dim + static_dim, self.binary_outputs, "binary",
-                                  width, layers, heads, dropout, gate_draws=False)
+                                  width, layers, heads, dropout, gate_draws=False, time=a.time)
             else:
                 predicted = [v for v in groups[name] if v in self.outputs] or list(groups[name])
                 encoder = Encoder(history_dim + len(self.binary_outputs) + static_dim, predicted,
-                                  "cnf" if cnf_heads else "point", width, layers, heads, dropout, gate_draws)
+                                  a.head, width, layers, heads, dropout, gate_draws, a.time, a.timing_head)
             self.encoders.append(encoder)
         self.register_buffer("cont_means", torch.zeros(nv))
         self.register_buffer("cont_stds", torch.ones(nv))
@@ -242,13 +290,15 @@ class GroupedModel(nn.Module):
             anchors.append(last_value)
         age = torch.log1p(torch.stack(ages, 1))
 
-        value = norm * mask
+        # Without event-time inputs the encoders read every value, recorded or carried, unmarked.
+        value = norm * mask if self.architecture.event_inputs else norm
         treatments = torch.cat([value[..., i:i + 1] for i in self.treatment_cont]
                                + [binary[..., i:i + 1] for i in self.treatment_bin], -1)
         cont_hist, bin_hist = value.clone(), binary.clone()
         cont_hist[..., self.treatment_cont] = 0.0
         bin_hist[..., self.treatment_bin] = 0.0
-        return {"history": torch.cat([cont_hist, bin_hist, mask, age], -1), "treatments": treatments,
+        parts = [cont_hist, bin_hist] + ([mask, age] if self.architecture.event_inputs else [])
+        return {"history": torch.cat(parts, -1), "treatments": treatments,
                 "anchor": torch.stack(anchors, 1), "static": history["static"],
                 "hours": hours.to(cont.device), "padding": history.get("padding_mask"),
                 "causal": torch.triu(torch.ones(t, t, device=cont.device), diagonal=1).bool(),
@@ -275,12 +325,12 @@ class GroupedModel(nn.Module):
         for index, name in enumerate(self.group_names):
             if name == BINARY_GROUP:
                 continue
+            kind = self.encoders[index].kind
             for var, pred in self._run(index, history, x, additions).items():
-                if self.encoders[index].kind == "cnf":
-                    pred["params"] = cnf.anchor(cnf.parse(pred["raw"]), x["anchor"][..., self.continuous_names.index(var)])
-                    pred["mu"] = pred["params"]["loc"]
-                else:
-                    pred["mu"] = pred["raw"].squeeze(-1)
+                params = H.parse(kind, pred["raw"], x["anchor"][..., self.continuous_names.index(var)])
+                pred["mu"] = params["mu"]
+                if kind != "point":
+                    pred["params"] = params
                 out[var] = pred
         return out
 
@@ -289,7 +339,8 @@ class GroupedModel(nn.Module):
         n = len(self.outputs)
         mu = torch.zeros(b, t, n, device=logits.device)
         log_var = torch.zeros(b, t, n, device=logits.device) if "params" in per_var[self.outputs[0]] else None
-        obs, delta = torch.zeros(b, t, n, device=logits.device), torch.zeros(b, t, n, device=logits.device)
+        obs = torch.zeros(b, t, n, device=logits.device)
+        delta = torch.zeros(b, t, n, device=logits.device) if "delta_t" in per_var[self.outputs[0]] else None
         params = []
         for i, name in enumerate(self.outputs):
             pred = per_var[name]
@@ -297,7 +348,8 @@ class GroupedModel(nn.Module):
             if log_var is not None:
                 log_var[:, :, i] = pred["params"]["log_var"]
             obs[:, :, i] = pred["obs_logit"]
-            delta[:, :, i] = pred["delta_t"]
+            if delta is not None:
+                delta[:, :, i] = pred["delta_t"]
             params.append(pred.get("params"))
         return {"mu": mu, "log_var": log_var, "obs_logits": obs, "delta_t_hours": delta,
                 "bin_logits": logits, "dist_params_list": params if params[0] is not None else None}
@@ -348,18 +400,20 @@ class GroupedModel(nn.Module):
         return result
 
 
-def pulse_model(protocol: Protocol) -> GroupedModel:
+def pulse_model(protocol: Protocol, architecture: Architecture = Architecture()) -> GroupedModel:
     """The PULSE encoders: covariance groups from the protocol plus the binary outcomes.
 
     Encoders are built in the key order of `protocol.groups`: the covariance
-    groups by label, then `continuous_treatments`, as in the reference.
+    groups by label, then `continuous_treatments`, as in the reference. The
+    reference built an unused gate layer per variable for the residual CNF
+    only (its anchored update mode), so only that head draws them.
     """
     if list(protocol.groups)[-1] != "continuous_treatments":
         raise ValueError("protocol groups must end with continuous_treatments")
     outputs = [n for n in V.CONTINUOUS if n != V.CONTINUOUS[V.BOLUS]]
     model = GroupedModel(groups={**protocol.groups, BINARY_GROUP: [n for n in V.BINARY if n != V.BINARY[V.VASOPRESSOR]]},
                          outputs=outputs, binary_outputs=[n for n in V.BINARY if n != V.BINARY[V.VASOPRESSOR]],
-                         cnf_heads=True, gate_draws=True)
+                         architecture=architecture, gate_draws=architecture.head == "rescnf")
     model.set_normalization(protocol.mean, protocol.sd)
     return model
 
@@ -369,7 +423,7 @@ class Policy(GroupedModel):
 
     def __init__(self, protocol: Protocol):
         super().__init__(groups=POLICY_GROUPS, outputs=[V.CONTINUOUS[V.BOLUS]], binary_outputs=[V.BINARY[V.VASOPRESSOR]],
-                         cnf_heads=False, gate_draws=False)
+                         architecture=POLICY_ARCHITECTURE, gate_draws=False)
         self.set_normalization(protocol.mean, protocol.sd)
 
     def treatments(self, continuous, binary, static, time_hours) -> dict:

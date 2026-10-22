@@ -6,11 +6,13 @@ times per patient. Each hour:
 
 1. PULSE reads the patient's event history so far (padded to 24 rows) and
    predicts the next-hour binary outcomes, which variables will be
-   recorded, the hours until they are, and a CNF law for every continuous
-   variable.
+   recorded, the hours until they are (with the timing head), and a law
+   for every continuous variable (`pulse.heads`).
 2. The binary outcomes are drawn; the continuous variables are drawn from
-   their CNF laws and clipped to their ranges; unrecorded variables keep
-   their last value.
+   their laws and clipped to their ranges; unrecorded variables keep
+   their last value. A point head has no law of its own: its value gets
+   static Gaussian noise fitted to hour-to-hour changes of validation
+   patients (`static_noise`).
 3. The policy proposes the bolus volume and draws the vasopressor
    indicator from the same history.
 4. Derived variables are recomputed, and the new hour joins the event
@@ -26,9 +28,10 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+import numpy as np
 import torch
 
-from pulse import cnf
+from pulse import heads as H
 from pulse import variables as V
 from pulse.data import Part, case_path, first_forecast_row, last_recorded_row, save_case
 # ARMS is defined with the feedback it describes; the command line and the
@@ -58,6 +61,56 @@ def sobol_table(paths: int, device=None) -> torch.Tensor:
     steps, k = 24, len(V.BINARY)
     engine = torch.quasirandom.SobolEngine(steps * k, scramble=True, seed=SOBOL_SEED)
     return engine.draw(paths).reshape(paths, steps, k).to(device)
+
+
+def static_noise(part) -> tuple[torch.Tensor, torch.Tensor]:
+    """Mean and SD [V] of the change between consecutive recorded hours, in physical units.
+
+    `part` is a prepared part, the validation patients for the published
+    rows. Both hours must be recorded (zero-invalid zeros count as not
+    recorded); a variable without such a pair gets mean 0 and SD 1. Sums
+    run in float64, patient by patient, as in the reference.
+    """
+    nv = part["continuous"].shape[-1]
+    sums, squares, counts = np.zeros(nv), np.zeros(nv), np.zeros(nv, dtype=np.int64)
+    for i in range(part["continuous"].shape[0]):
+        cont = part["continuous"][i]
+        mask = V.zero_invalid_mask(cont.unsqueeze(0), part["continuous_mask"][i].unsqueeze(0)).squeeze(0)
+        valid = ((mask[:-1] > 0) & (mask[1:] > 0)).numpy()
+        deltas = np.where(valid, (cont[1:] - cont[:-1]).numpy().astype(np.float64), 0.0)
+        counts += valid.sum(axis=0)
+        sums += deltas.sum(axis=0)
+        squares += (deltas * deltas).sum(axis=0)
+    means, sds = np.zeros(nv), np.ones(nv)
+    present = counts > 0
+    means[present] = sums[present] / counts[present]
+    variance = np.zeros(nv)
+    variance[present] = squares[present] / counts[present] - means[present] * means[present]
+    sds[present] = np.sqrt(np.maximum(variance[present], 0.0))
+    return torch.tensor(means, dtype=torch.float32), torch.tensor(sds, dtype=torch.float32)
+
+
+def _draw(core, out: dict, noise: tuple[torch.Tensor, torch.Tensor] | None) -> torch.Tensor:
+    """Next values [R, V_out] in physical units, drawn as the reference drew each head.
+
+    The mixture and the flows are drawn in standardised units and scaled
+    back. The Gaussian and the point head are drawn in physical units from
+    a location and a standard deviation, which rounds differently.
+    """
+    kind, primary = core.architecture.head, core.output_indices
+    if kind in ("mog2",) + H.FLOWS:
+        params = H.stack(kind, out["dist_params_list"], index=0)
+        return core.denormalize(H.sample(kind, params).unsqueeze(1), primary).squeeze(1)
+    mu = core.denormalize(out["mu"][:, 0, :].unsqueeze(1), primary).squeeze(1)
+    if kind == "gaussian":
+        sigma = torch.exp(0.5 * torch.clamp(out["log_var"][:, 0, :], min=H.LOG_VAR_MIN))
+        sigma = sigma * core.cont_stds.clone().to(mu.device)[primary]
+        return mu + sigma * torch.randn_like(mu)
+    if noise is None:
+        raise ValueError("a point head needs the static noise of the validation patients")
+    mean, sd = (v.to(mu.device)[primary] for v in noise)
+    sigma = torch.sqrt(torch.zeros_like(mu) ** 2 + sd ** 2)
+    return (mu + mean) + sigma * torch.randn_like(mu)
 
 
 def _gap(observed: torch.Tensor, hours_until: torch.Tensor) -> torch.Tensor:
@@ -202,11 +255,16 @@ def _next_binaries(core, arm: Arm, x: dict, logits: torch.Tensor, history: _Even
 
 
 @torch.no_grad()
-def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
-            paths: int) -> tuple[torch.Tensor, torch.Tensor]:
+def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int, paths: int, *,
+            noise: tuple[torch.Tensor, torch.Tensor] | None = None,
+            policy_at_last_event: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
     """Generate the hours after forecast origin `k`, from row `first_forecast_row(k)` on.
 
-    Returns continuous [N, P, T, V] and binary [N, P, T, K].
+    `noise` is the static noise of a point head (`static_noise`). With
+    `policy_at_last_event` the policy's output is read at the last row of
+    each event history; otherwise at the last of the 24 padded rows, as in
+    the runs published before 19 October. Returns continuous [N, P, T, V]
+    and binary [N, P, T, K].
     """
     core = pulse.pulse
     pulse.eval()
@@ -245,24 +303,32 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
 
         obs_probs = torch.sigmoid(out["obs_logits"][:, 0, :]).clamp(1e-6, 1.0 - 1e-6)
         observed = torch.rand_like(obs_probs) < obs_probs
-        gap = _gap(observed, out["delta_t_hours"][:, 0, :])
+        # Without the timing head a generated hour sits on the one-hour grid.
+        gap = None if out["delta_t_hours"] is None else _gap(observed, out["delta_t_hours"][:, 0, :])
 
-        params = {k: torch.stack([p[k][:, 0] for p in out["dist_params_list"]], 1)
-                  for k in cnf.FLOW_KEYS}
-        draw = core.denormalize(cnf.sample(params).unsqueeze(1), primary).squeeze(1)
+        draw = _draw(core, out, noise)
         draw = torch.min(torch.max(draw, low[primary]), high[primary])
         next_cont = cont[:, t, :].clone()
         next_cont[:, primary] = draw
 
-        # The policy reads the whole padded history, and its output at the last
-        # of the 24 rows, which is padding while the history is shorter, sets
-        # the bolus volume and the vasopressor draw. Reading the last valid row
-        # would be the cleaner form, but it changes every rollout; the published
-        # runs read the last row.
+        # The policy reads the whole padded history. The runs published before
+        # 19 October read its output at the last of the 24 rows, which is
+        # padding while the history is shorter; the policy is causal, so the
+        # last row of the event history gives the decision from the history.
+        # The two readings also differ in the last bits: the sigmoid of a
+        # strided view and of a gathered copy take different CPU kernels.
         treatment = policy.treatments(model_input["continuous"], history.binary, static, history.time)
-        vaso_probs = torch.sigmoid(treatment["binary_treatment_logits"][:, -1, :])
+        if policy_at_last_event:
+            rows_all = torch.arange(rows_total, device=cont.device)
+            read = (history.lengths - 1).clamp_min(0)
+            vaso_logits = treatment["binary_treatment_logits"][rows_all, read, :]
+            bolus_volume = treatment["continuous_treatments"][rows_all, read, :]
+        else:
+            vaso_logits = treatment["binary_treatment_logits"][:, -1, :]
+            bolus_volume = treatment["continuous_treatments"][:, -1, :]
+        vaso_probs = torch.sigmoid(vaso_logits)
         vaso_draw = (uniforms(vaso_probs, [vaso], t) < vaso_probs).float()
-        next_cont[:, [bolus]] = treatment["continuous_treatments"][:, -1, :]
+        next_cont[:, [bolus]] = bolus_volume
 
         next_bin = binary[:, t, :].clone()
         next_bin[:, outcome] = next_outcomes
@@ -286,9 +352,14 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
         joins = (drawn_recorded | event | (next_cont[:, bolus] - cont[:, t, bolus]).abs().gt(1e-6)
                  | (next_bin[:, vaso] != binary[:, t, vaso]))
         timed = drawn_recorded | event
-        next_time = torch.where(drawn_recorded, times[:, t] + gap, times[:, t + 1])
-        times[:, t + 1] = torch.where(timed, next_time, times[:, t])
-        rows, cols = history.append(joins, timed, next_cont, next_bin, next_mask, times[:, t + 1], gap)
+        if gap is None:
+            times[:, t + 1] = torch.where(timed, times[:, t + 1], times[:, t])
+            rows, cols = history.append(joins, torch.zeros_like(timed), next_cont, next_bin, next_mask,
+                                        times[:, t + 1], gap)
+        else:
+            next_time = torch.where(drawn_recorded, times[:, t] + gap, times[:, t + 1])
+            times[:, t + 1] = torch.where(timed, next_time, times[:, t])
+            rows, cols = history.append(joins, timed, next_cont, next_bin, next_mask, times[:, t + 1], gap)
         if feedback is not None:
             feedback.record(out, vaso_probs, rows, cols, step=t, generated=cont[:, t + 1, :], recorded=next_mask,
                             baseline=baseline)
@@ -297,7 +368,8 @@ def rollout(pulse: FeedbackPULSE, policy: Policy, arm: Arm, batch: Part, k: int,
 
 
 def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int, paths: int, out: Path,
-             per_call: int = PER_CALL, provenance: dict[str, str] | None = None) -> None:
+             per_call: int = PER_CALL, provenance: dict[str, str] | None = None, *,
+             noise: tuple[torch.Tensor, torch.Tensor] | None = None, policy_at_last_event: bool = False) -> None:
     """Roll out every test patient and write one case file each.
 
     Patients go in groups of `per_call`; each group is seeded from the
@@ -308,12 +380,17 @@ def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int,
     `provenance`, for example the SHA-256 digests of the checkpoints, is
     stored and checked with the settings, so that existing case files are
     never kept for rollouts of other weights; an empty mapping counts as
-    none.
+    none. `noise` and `policy_at_last_event` are passed to `rollout` and
+    recorded when set.
     """
     n = test["continuous"].shape[0]
     record = {"arm": asdict(arm), "origin": k, "paths": paths, "per_call": per_call, "seed": SEED + 1000 * k}
     if provenance:
         record["provenance"] = dict(provenance)
+    if noise is not None:
+        record["static_noise"] = {"mean": noise[0].tolist(), "sd": noise[1].tolist()}
+    if policy_at_last_event:
+        record["policy_at_last_event"] = True
     settings = Path(out) / "rollout.json"
     if settings.exists() and json.loads(settings.read_text()) != record:
         raise ValueError(f"{out} holds rollouts made with other settings")
@@ -328,6 +405,7 @@ def evaluate(pulse: FeedbackPULSE, policy: Policy, arm: Arm, test: Part, k: int,
             continue
         torch.manual_seed(SEED + 1000 * k + first)
         batch = {key: value[first:ids[-1] + 1] for key, value in test.items()}
-        cont, binary = rollout(pulse, policy, arm, batch, k, paths)
+        cont, binary = rollout(pulse, policy, arm, batch, k, paths, noise=noise,
+                               policy_at_last_event=policy_at_last_event)
         for offset, i in enumerate(ids):
             save_case(out, i, cont[offset], binary[offset])

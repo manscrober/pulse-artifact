@@ -7,18 +7,19 @@ vasopressor descriptor of its preview pass (`pulse.feedback`).
 
 The PULSE loss is the sum, in this order, of
 
-* the CNF negative log density of the standardised next values, averaged
-  over recorded non-ordinal entries,
-* the squared error of the CNF location for the ordinal variables (SOFA
-  score and oxygen requirement level), averaged over their recorded entries,
+* the negative log density of the standardised next values under the
+  model's head (`pulse.heads`), averaged over recorded non-ordinal entries,
+* the squared error of the location for the ordinal variables (SOFA
+  score and oxygen requirement level), averaged over their recorded entries;
+  a point head has instead the squared error over all recorded entries,
 * the cross-entropy of the next-hour binary outcomes, where an absorbing
   outcome (death, release, pulmonary edema) counts only up to and including
   its first occurrence and is held at one afterwards,
 * the mean cross-entropy of the observation logits against whether each
   variable is recorded in the next row,
-* 0.05 times a smooth L1 loss between log(1 + predicted hours) and
-  log(1 + hours until the variable is next recorded), those hours set to
-  48 when the variable is not recorded again.
+* with the timing head, 0.05 times a smooth L1 loss between
+  log(1 + predicted hours) and log(1 + hours until the variable is next
+  recorded), those hours set to 48 when the variable is not recorded again.
 
 The policy loss is the squared error of the next bolus volume in training
 standard deviations, averaged over recorded entries, plus the cross-entropy
@@ -42,7 +43,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from pulse import cnf
+from pulse import heads as H
 from pulse import model as M
 from pulse import variables as V
 from pulse.data import Part, Prepared, Protocol
@@ -113,13 +114,20 @@ def pulse_loss(pulse: FeedbackPULSE, batch: Part, arm: Arm) -> torch.Tensor:
     recorded = batch["continuous_mask"][:, 1:, idx]
     ordinal = torch.tensor([core.continuous_names[i] in V.ORDINAL for i in idx], device=target.device).view(1, 1, -1)
 
-    density = recorded * (~ordinal).to(recorded.dtype)
-    params = {k: torch.stack([p[k][:, :-1] for p in out["dist_params_list"]], 2)
-              for k in cnf.FLOW_KEYS}
-    nll = cnf.nll(params, target)
-    loss = (nll.reshape_as(density) * density).sum() / (density.sum() + 1e-8)
-    squared = recorded * ordinal.to(recorded.dtype)
-    loss = loss + ((target - out["mu"][:, :-1]) ** 2 * squared).sum() / (squared.sum() + 1e-8)
+    kind = core.architecture.head
+    if kind == "point":
+        loss = ((target - out["mu"][:, :-1]) ** 2 * recorded).sum() / (recorded.sum() + 1e-8)
+    else:
+        density = recorded * (~ordinal).to(recorded.dtype)
+        if kind == "gaussian":
+            # The reference scored the Gaussian through its output log variance, which the head already clamps.
+            params = {"mu": out["mu"][:, :-1], "log_var": out["log_var"][:, :-1]}
+        else:
+            params = H.stack(kind, out["dist_params_list"], slice(None, -1))
+        nll = H.nll(kind, params, target)
+        loss = (nll.reshape_as(density) * density).sum() / (density.sum() + 1e-8)
+        squared = recorded * ordinal.to(recorded.dtype)
+        loss = loss + ((target - out["mu"][:, :-1]) ** 2 * squared).sum() / (squared.sum() + 1e-8)
 
     absorbing = torch.tensor([core.binary_names[i] in V.ABSORBING for i in core.binary_output_indices],
                              device=target.device)
@@ -131,6 +139,8 @@ def pulse_loss(pulse: FeedbackPULSE, batch: Part, arm: Arm) -> torch.Tensor:
     loss = loss + F.binary_cross_entropy_with_logits(observed, (recorded > 0).to(observed.dtype),
                                                      reduction="none").mean()
 
+    if out["delta_t_hours"] is None:
+        return loss
     predicted = out["delta_t_hours"][:, :-1]
     waits = _hours_to_next_record(batch["continuous_mask"][:, :, idx], batch["time_hours"])
     valid = (torch.isfinite(predicted) & torch.isfinite(waits)).to(predicted.dtype)
@@ -190,13 +200,14 @@ def mps_attention_dropout():
 
 # Loop -----------------------------------------------------------------------
 
-def build(phase: str, prepared: Prepared, policy: M.Policy | None):
+def build(phase: str, prepared: Prepared, policy: M.Policy | None,
+          architecture: M.Architecture = M.Architecture()):
     """A freshly seeded model for `phase`; PULSE phases read the frozen `policy`."""
     if phase == "policy":
         return M.build_policy(prepared.protocol)
     if policy is None:
         raise ValueError(f"phase {phase} needs the trained policy")
-    model = build_pulse(prepared.protocol, prepared.train["binary"])
+    model = build_pulse(prepared.protocol, prepared.train["binary"], architecture)
     model.attach_policy(policy)
     return model
 
@@ -249,7 +260,8 @@ def validation(model, part: Part, phase: str, micro: int, device) -> float:
 
 
 def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str = "cpu",
-        settings: Settings = Settings(), on_epoch: Callable[[dict], None] | None = None) -> dict:
+        settings: Settings = Settings(), on_epoch: Callable[[dict], None] | None = None,
+        architecture: M.Architecture = M.Architecture()) -> dict:
     """Train one phase; write the best validation weights to `<out>/<phase>.pt`.
 
     `<out>/protocol.json` receives the protocol, whose cache digest the
@@ -260,7 +272,8 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     phases. Only the best epoch's weights are written; there is no
     last-epoch checkpoint. `on_epoch`, when given, receives each
     epoch's entry of the validation history as soon as it is known; the
-    command line prints it.
+    command line prints it. `architecture` chooses the PULSE variant of
+    the component table (`pulse.model.Architecture`).
 
     The published weights were trained on a CUDA device. Training on the
     CPU or on Apple MPS follows the same procedure, data order and
@@ -274,14 +287,14 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     if protocol.exists() and Protocol.load(protocol) != prepared.protocol:
         raise ValueError(f"{protocol} holds another protocol")
     with mps_attention_dropout() if torch.device(device).type == "mps" else contextlib.nullcontext():
-        return _fit(phase, prepared, policy, Path(out), device, settings, on_epoch)
+        return _fit(phase, prepared, policy, Path(out), device, settings, on_epoch, architecture)
 
 
 def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str,
-         settings: Settings, on_epoch: Callable[[dict], None] | None) -> dict:
+         settings: Settings, on_epoch: Callable[[dict], None] | None, architecture: M.Architecture) -> dict:
     if policy is not None:
         policy.to(device)
-    model = build(phase, prepared, policy).to(device)
+    model = build(phase, prepared, policy, architecture).to(device)
     optimizer, scheduler = optimiser(model, phase, settings.epochs)
     patients = len(prepared.train["continuous"])
     updates_per_epoch = math.ceil(patients / settings.batch)
