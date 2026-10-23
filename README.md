@@ -25,7 +25,7 @@ pip install -e ".[test]"            # add ",cohort" to build the cache from MIMI
 pytest
 ```
 
-Only building the cohort cache needs the DuckDB driver, which the
+Only building the cohort and eICU caches needs the DuckDB driver, which the
 `cohort` extra installs; every other part of the package and all tests run
 without it. The test suite takes about a minute on one CPU and includes an
 end-to-end run of every command on a tiny synthetic cohort
@@ -50,9 +50,13 @@ command lists its options and defaults.
 | command | reads | writes |
 |---|---|---|
 | `build-cache` | the MIMIC-IV DuckDB database | the cohort cache, `cache/sepsis.pt` |
+| `build-eicu` | the eICU CSV files | the transfer cache, `cache/eicu.pt` |
 | `train` | the cache | `<phase>.pt`, `<row>.pt` and `protocol.json` in `runs/checkpoints` |
 | `rollout` | the cache and the checkpoints | `runs/rollouts/<arm or row>/k<origin>/case_XXXX.pt` |
 | `score` | the cache, the protocol and the rollouts | one JSON file of scored rows |
+
+With `--eicu cache/eicu.pt`, `rollout` and `score` take the first 1,000
+test stays of the transfer cache in place of the MIMIC test patients.
 
 ## Data access and the cohort cache
 
@@ -89,6 +93,29 @@ one file of tensors: continuous values and their recorded-value mask
 [stays, 24, 37], binary events [stays, 24, 8], hours, 6 static variables,
 and subject, stay and admission identifiers. The `cache` and `runs`
 directories are ignored by git.
+
+The eICU column of the component table tests the MIMIC-trained models,
+without refitting, on the eICU Collaborative Research Database v2.0, which
+PhysioNet also provides to credentialed users. `build-eicu` reads six of
+its compressed CSV files (`patient`, `diagnosis`, `vitalPeriodic`,
+`vitalAperiodic`, `medication` and `treatment`) with DuckDB and keeps the
+stays with a sepsis diagnosis whose first 24 hours each hold a vital sign:
+21,659 of 200,859 unit stays in the published transfer. It writes them in
+the cache format with the same 37 continuous, 8 binary and 6 static
+variables; `pulse.eicu` states every rule. Among the continuous variables
+eICU records heart rate, blood pressure, temperature, respiratory rate,
+oxygen saturation and weight; the others are missing in every hour and are
+never scored.
+
+```
+python -m pulse build-eicu --eicu-dir /path/to/physionet.org/files/eicu-crd/2.0 --out cache/eicu.pt
+```
+
+The stays are split 70/10/20 by a seeded permutation, and the transfer test
+uses the first 1,000 of the 4,332 test stays. The MIMIC training
+statistics of the protocol fill and scale them, and point heads draw the
+static noise of the MIMIC validation patients, so no eICU value enters a
+model or a statistic.
 
 ## Preparation
 
@@ -279,14 +306,24 @@ python -m pulse score --protocol runs/rows/protocol.json --rollouts runs/rows/ro
     --out tables/components.json --binary-out tables/components_binary.json
 ```
 
-The eICU column needs the eICU cohort, which this release does not build
-yet.
+The eICU column rolls out the same rows on the transfer cache and reports
+the normalised RMSE over the recorded variables (`nrmse_primary` of the
+scored rows), with carry-forward as the forecast without a model:
+
+```
+python -m pulse rollout --checkpoints runs/rows --eicu cache/eicu.pt --out runs/rows/eicu --paths 100 \
+    --rows point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback
+python -m pulse score --protocol runs/rows/protocol.json --eicu cache/eicu.pt --rollouts runs/rows/eicu \
+    --arms point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback \
+    carry_forward --out tables/components_eicu.json
+```
+
 **[AUTHOR DECISION PENDING: the expected numbers of Table 2. The text of
 19 October prints runs made before the policy fix of that day. The scorer
 reproduces the scores of the runs after the fix from their saved rollouts:
 the binary outcome panel bit for bit and every aligned score within float64
-rounding (at most 7.6e-16). Add the numbers of the table the paper prints,
-and the eICU commands, before release.]**
+rounding (at most 7.6e-16). Add the numbers of the table the paper prints
+before release.]**
 
 Table 1 of the submitted paper, 100 paths per patient against sampled
 history.
@@ -485,7 +522,7 @@ bit.
 The first point below describes how a rebuilt cache differs from the
 published one; points 2 to 8 are properties of the published cohort that
 the code keeps as they ran; the ninth and tenth concern statistics and
-training on other devices.
+training on other devices, and the last two the eICU transfer.
 
 1. The order of rows with equal sort keys is unspecified in SQL, and hourly
    float64 sums and means depend on the order of their terms. Before
@@ -541,6 +578,27 @@ training on other devices.
     reference implementation bit for bit on the CPU: the losses, gradients
     and parameters of the first updates of every phase, and the rollouts of
     every arm on synthetic weights.
+11. The published eICU transfer read a benchmark cache that stored ages
+    scaled with MIMIC statistics, and recovered them by assuming that they
+    span 18 to 90 years. eICU ages span 15 to 89 (ages above 89 are
+    recorded as 89), so the models received ages 1.0 to 2.9 years too high
+    (1.6 on average over the 1,000 test stays). `pulse.eicu` stores each
+    stay's age in years. With the published ages in its place, the test
+    part equals the published transfer's inputs, targets, masks, events and
+    static variables bit for bit, and its 1,000 stays are the published
+    ones. The builder was checked against the published benchmark without
+    the `vitalPeriodic` file: it finds the same 200,859 unit stays and
+    32,154 sepsis stays, and for the 21,659 published stays the same ages,
+    sex, diagnoses, binary events and weights bit for bit, and the same
+    non-invasive blood-pressure means bit for bit in every hour whose
+    published value came from them. The vital-sign means of the periodic
+    record and the coverage filter were not rebuilt.
+12. As in the published transfer, eICU marks pulmonary oedema from the
+    diagnoses in every hour of a stay that has the diagnosis (23 of the
+    1,000 test stays), and the binary history carries it into the models,
+    which never saw the indicator set in MIMIC (point 4). End-stage renal
+    failure and congestive heart failure, static variables recorded for 45
+    and 126 of the test stays, are set to zero for that reason.
 
 ## Open author checks
 
@@ -574,6 +632,8 @@ tests fail on a release.
   computes its static variables.
 - `pulse/cohort.py` reads the cohort from a DuckDB database and writes the
   cache.
+- `pulse/eicu.py` selects the eICU stays of the transfer test from the eICU
+  CSV files and maps its test stays onto the MIMIC variables.
 - `pulse/data.py` holds the cache format, the split, preparation, the
   protocol and the files of sampled paths.
 - `pulse/cnf.py` holds the conditional normalising flow of one continuous

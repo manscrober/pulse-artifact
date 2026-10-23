@@ -106,11 +106,11 @@ CACHE_TENSORS = ("continuous", "continuous_mask", "binary", "time_hours", "stati
                  "subject_ids", "stay_ids", "hadm_ids")
 
 
-def save_cache(cache: dict, path: Path) -> Path:
-    """Write the cohort tensors [N, T, ...] and their variable names."""
+def save_cache(cache: dict, path: Path, keys: tuple[str, ...] = CACHE_TENSORS) -> Path:
+    """Write the cohort tensors [N, T, ...] named by `keys` and their variable names."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {key: cache[key] for key in CACHE_TENSORS}
+    payload = {key: cache[key] for key in keys}
     payload.update(continuous_names=list(V.CONTINUOUS), binary_names=list(V.BINARY), static_names=list(V.STATIC))
     pending = path.with_suffix(".pending")
     torch.save(payload, pending)
@@ -121,14 +121,14 @@ def save_cache(cache: dict, path: Path) -> Path:
 NAME_LISTS = ("continuous_names", "binary_names", "static_names")
 
 
-def cache_digest(cache: dict) -> str:
+def cache_digest(cache: dict, keys: tuple[str, ...] = CACHE_TENSORS) -> str:
     """SHA-256 over the cache content: each tensor's dtype, shape and bytes, then the name lists.
 
     The digest is independent of the file name and of the serialisation
     format, which both change the bytes of a `torch.save` file.
     """
     digest = hashlib.sha256()
-    for key in CACHE_TENSORS:
+    for key in keys:
         tensor = cache[key].contiguous()
         digest.update(f"{key}:{tensor.dtype}:{list(tensor.shape)}\n".encode())
         digest.update(tensor.numpy().tobytes())
@@ -137,13 +137,13 @@ def cache_digest(cache: dict) -> str:
     return digest.hexdigest()
 
 
-def load_cache(path: Path) -> dict:
+def load_cache(path: Path, keys: tuple[str, ...] = CACHE_TENSORS) -> dict:
     """Read a cache written by `save_cache` and record its content digest as `sha256`."""
     cache = torch.load(path, map_location="cpu", weights_only=True)
     for key, names in zip(NAME_LISTS, (V.CONTINUOUS, V.BINARY, V.STATIC)):
         if list(cache[key]) != list(names):
             raise ValueError(f"{path}: {key} differ from pulse.variables")
-    cache["sha256"] = cache_digest(cache)
+    cache["sha256"] = cache_digest(cache, keys)
     return cache
 
 

@@ -1,13 +1,14 @@
 """Command line of the PULSE reproduction: `python -m pulse <command>`.
 
     build-cache  bin the sepsis cohort from a MIMIC-IV database into a cache
+    build-eicu   select the eICU sepsis stays of the transfer test into a cache
     train        train the policy, the PULSE phases, the rows of the
                  component table (`pulse.rows`) or the G-Transformer
     rollout      roll out the test patients for arms or rows
     score        score saved rollouts against the recorded test values
 
-Each command imports only the modules it needs, so that `build-cache`
-alone requires the DuckDB driver.
+Each command imports only the modules it needs, so that `build-cache` and
+`build-eicu` alone require the DuckDB driver.
 """
 from __future__ import annotations
 
@@ -17,6 +18,8 @@ from pathlib import Path
 
 DATABASE = Path("mimiciv.duckdb")
 CACHE = Path("cache/sepsis.pt")
+EICU_DIR = Path("eicu-crd")
+EICU_CACHE = Path("cache/eicu.pt")
 CHECKPOINTS = Path("runs/checkpoints")
 ROLLOUTS = Path("runs/rollouts")
 
@@ -34,6 +37,12 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--database", type=Path, default=DATABASE,
                        help="DuckDB database with MIMIC-IV and its derived concepts")
     build.add_argument("--out", type=Path, default=CACHE)
+
+    build_eicu = commands.add_parser("build-eicu", formatter_class=from_defaults,
+                                     help="select the eICU sepsis stays of the transfer test into a cache")
+    build_eicu.add_argument("--eicu-dir", type=Path, default=EICU_DIR,
+                            help="folder with the CSV files of the eICU Collaborative Research Database v2.0")
+    build_eicu.add_argument("--out", type=Path, default=EICU_CACHE)
 
     train = commands.add_parser("train", formatter_class=from_defaults,
                                 help="train the policy, the PULSE phases, rows or the baseline")
@@ -73,6 +82,10 @@ def _parser() -> argparse.ArgumentParser:
                          help="for --arms, read the policy at the last row of the event history, as the "
                               "component table does; default: at the last padded row, as the runs "
                               "published before 19 October")
+    rollout.add_argument("--eicu", type=Path, default=None,
+                         help="roll out the first 1,000 test stays of this eICU cache (build-eicu) in place of "
+                              "the MIMIC test patients; --cache and the protocol still give the MIMIC training "
+                              "statistics and the static noise of point heads")
     rollout.add_argument("--device", default="cpu")
 
     score = commands.add_parser("score", formatter_class=from_defaults,
@@ -87,6 +100,9 @@ def _parser() -> argparse.ArgumentParser:
     score.add_argument("--targets", choices=("recorded", "all_hours"), default="recorded",
                        help="score recorded values (the component table) or every forecast hour against the "
                             "filled targets (the G-Transformer paper's predictive check)")
+    score.add_argument("--eicu", type=Path, default=None,
+                       help="score rollouts of the first 1,000 test stays of this eICU cache, written by rollout "
+                            "--eicu, in place of the MIMIC test patients")
     score.add_argument("--origins", type=int, nargs="+", choices=ORIGINS, default=list(ORIGINS))
     score.add_argument("--resamples", type=int, default=2000)
     score.add_argument("--out", type=Path, required=True, help="JSON file for the scored rows")
@@ -231,7 +247,13 @@ def rollout(args) -> None:
         raise SystemExit("missing checkpoint files: " + ", ".join(missing))
     prepared = _prepare(args.cache, args.checkpoints / "protocol.json")
     protocol = prepared.protocol
-    test = {key: value.to(args.device) for key, value in prepared.test.items()}
+    test, tested = prepared.test, {}
+    if args.eicu is not None:
+        from pulse import eicu
+
+        transfer = eicu.load_cache(args.eicu)
+        test, tested = eicu.test_part(transfer, protocol), {"eicu_cache": transfer["sha256"]}
+    test = {key: value.to(args.device) for key, value in test.items()}
     policy = _load_policy(args.checkpoints, protocol).to(args.device)
     per_call = S.PER_CALL if args.per_call is None else args.per_call
     policy_sha256 = _file_sha256(args.checkpoints / "policy.pt")
@@ -248,7 +270,7 @@ def rollout(args) -> None:
         noise = S.static_noise(prepared.val) if architecture is None or architecture.head == "point" else None
         # The digests tie each rollout directory to the exact checkpoint files,
         # so a rerun with other weights is refused, never mixed in.
-        provenance = {"policy": policy_sha256, "weights": _file_sha256(path)}
+        provenance = {"policy": policy_sha256, "weights": _file_sha256(path), **tested}
         for origin in args.origins:
             out = args.out / name / f"k{origin}"
             S.evaluate(model, policy, arm, test, origin, args.paths, out, per_call=per_call, provenance=provenance,
@@ -264,9 +286,17 @@ def score(args) -> None:
     for label in args.arms:
         name, _, limit = label.partition(":")
         arms[label] = (None, None) if label in scoring.BASELINES else (args.rollouts / name, int(limit) if limit else None)
-    cache = data.load_cache(args.cache)
+    if args.eicu is None:
+        cache, rows = data.load_cache(args.cache), None
+    else:
+        from pulse import eicu
+
+        if args.binary_out:
+            raise SystemExit("--binary-out scores the MIMIC test patients only")
+        cache = eicu.load_cache(args.eicu)
+        rows = eicu.test_rows(cache)
     result = scoring.score(arms, cache, data.Protocol.load(args.protocol), origins=tuple(args.origins),
-                           resamples=args.resamples, pit=args.pit, targets=args.targets)
+                           resamples=args.resamples, pit=args.pit, targets=args.targets, test_rows=rows)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=1) + "\n")
     print(f"{len(result['rows'])} rows -> {args.out}")
@@ -284,6 +314,10 @@ def main(argv: list[str] | None = None) -> int:
         from pulse import cohort
 
         print(cohort.build_cache(args.database, args.out))
+    elif args.command == "build-eicu":
+        from pulse import eicu
+
+        print(json.dumps(eicu.build_cache(args.eicu_dir, args.out)))
     else:
         {"train": train, "rollout": rollout, "score": score}[args.command](args)
     return 0

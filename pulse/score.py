@@ -262,12 +262,16 @@ def _paired(row: dict, loss: dict[str, np.ndarray], arm: str, previous: str | No
 
 
 def score(arms: dict[str, tuple[Path | None, int | None]], cache: dict, protocol: Protocol, origins=data.ORIGINS,
-          resamples: int = 2000, seed: int = 20261006, pit: bool = False, targets: str = "recorded") -> dict:
+          resamples: int = 2000, seed: int = 20261006, pit: bool = False, targets: str = "recorded",
+          test_rows: np.ndarray | None = None) -> dict:
     """Score arms {label: (directory, first M paths or None)}; the first arm is the reference.
 
     Each directory holds `k{origin}/case_XXXX.pt` for every origin; an arm
     without one is a baseline of `BASELINES`. `targets` picks the scored
-    points, one of `TARGETS`. Rows give
+    points, one of `TARGETS`. The test patients are the cache's test split,
+    or the cache rows `test_rows` of another cache scored with the
+    protocol's statistics, such as the eICU stays of
+    `pulse.eicu.test_rows`. Rows give
     the point estimate and the 2.5% and 97.5% bootstrap quantiles of each
     metric, and for every other arm the same for its difference from the
     reference. Each row also compares the arm's loss with the arm before it
@@ -277,14 +281,15 @@ def score(arms: dict[str, tuple[Path | None, int | None]], cache: dict, protocol
     each arm's directory and path limit, and the number of resamples and
     the seed, so that a saved table names the rollouts it was computed from.
     """
-    if protocol.cache_sha256 != cache["sha256"]:
-        raise ValueError("the cache differs from the one the protocol was prepared from")
+    if test_rows is None:
+        if protocol.cache_sha256 != cache["sha256"]:
+            raise ValueError("the cache differs from the one the protocol was prepared from")
+        test_rows = data.select(cache["subject_ids"])["test"]
     if targets not in TARGETS:
         raise ValueError(f"targets are one of {TARGETS}")
     reference = next(iter(arms))
     mean = torch.tensor(protocol.mean)
     sd = np.array(protocol.sd)
-    test_rows = data.select(cache["subject_ids"])["test"]
     rows = []
     for k in origins:
         y, mask, predictions, cases = collect(arms, cache, test_rows, mean, k)

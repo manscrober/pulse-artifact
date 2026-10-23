@@ -178,8 +178,9 @@ def test_score_reads_path_limits_from_labels(monkeypatch, tmp_path):
     monkeypatch.setattr("pulse.data.load_cache", lambda path: "cache")
     monkeypatch.setattr("pulse.data.Protocol.load", lambda path: "protocol")
 
-    def score(arms, cache, protocol, origins, resamples, pit, targets):
-        seen.update(arms=arms, origins=origins, resamples=resamples, pit=pit, targets=targets)
+    def score(arms, cache, protocol, origins, resamples, pit, targets, test_rows):
+        seen.update(arms=arms, cache=cache, origins=origins, resamples=resamples, pit=pit, targets=targets,
+                    test_rows=test_rows)
         return {"rows": [{"arm": label} for label in arms]}
 
     monkeypatch.setattr(scoring, "score", score)
@@ -193,7 +194,13 @@ def test_score_reads_path_limits_from_labels(monkeypatch, tmp_path):
     cli.main(["score", "--rollouts", str(tmp_path), "--arms", "carry_forward", "sample", "--targets", "all_hours",
               "--out", str(out)])
     assert seen["arms"] == {"carry_forward": (None, None), "sample": (tmp_path / "sample", None)}
-    assert seen["targets"] == "all_hours"
+    assert seen["targets"] == "all_hours" and seen["cache"] == "cache" and seen["test_rows"] is None
+    monkeypatch.setattr("pulse.eicu.load_cache", lambda path: "eicu cache")
+    monkeypatch.setattr("pulse.eicu.test_rows", lambda cache: "eicu rows")
+    cli.main(["score", "--eicu", "eicu.pt", "--rollouts", str(tmp_path), "--arms", "sample", "--out", str(out)])
+    assert seen["cache"] == "eicu cache" and seen["test_rows"] == "eicu rows"
+    with pytest.raises(SystemExit, match="MIMIC test patients only"):
+        cli.main(["score", "--eicu", "eicu.pt", "--arms", "sample", "--out", str(out), "--binary-out", str(out)])
 
 
 def test_score_writes_the_binary_panel_on_request(monkeypatch, tmp_path):

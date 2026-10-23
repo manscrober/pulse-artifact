@@ -2,16 +2,20 @@
 
 The database is replaced by synthetic stays and the split by 8, 4 and 3
 subjects; everything else runs as published, with one training epoch and
-two paths per patient.
+two paths per patient. The trained models are then rolled out and scored on
+a synthetic eICU cache of 12 stays, whose test split holds 3.
 """
 import json
 import types
 
 import pandas as pd
 import pytest
+import torch
 
-from pulse import cohort, data
+from pulse import cohort, data, eicu
+from pulse import variables as V
 from pulse.__main__ import main
+from synthetic import cache as synthetic_cache
 from synthetic import source_stays
 
 SPLIT = {"train": 8, "val": 4, "test": 3}
@@ -53,3 +57,30 @@ def test_build_train_roll_out_and_score(monkeypatch, tmp_path):
     assert result["reference"] == "sample"
     assert {row["arm"] for row in result["rows"]} == {"sample", "distribution", "distribution:1"}
     assert {row["origin"] for row in result["rows"]} == {2, 6}
+
+    transfer, transfer_rollouts = tmp_path / "eicu.pt", tmp_path / "eicu_rollouts"
+    eicu.save_cache(eicu_like(), transfer)
+    main(["rollout", "--cache", str(cache), "--checkpoints", str(checkpoints), "--arms", "sample", "--paths", "2",
+          "--per-call", "2", "--eicu", str(transfer), "--out", str(transfer_rollouts)])
+    record = json.loads((transfer_rollouts / "sample" / "k6" / "rollout.json").read_text())
+    assert record["provenance"]["eicu_cache"] == eicu.load_cache(transfer)["sha256"]
+    assert len(list((transfer_rollouts / "sample" / "k2").glob("case_*.pt"))) == 3
+    table = tmp_path / "eicu_table.json"
+    main(["score", "--eicu", str(transfer), "--protocol", str(checkpoints / "protocol.json"), "--rollouts",
+          str(transfer_rollouts), "--arms", "sample", "carry_forward", "--resamples", "20", "--out", str(table)])
+    rows = json.loads(table.read_text())["rows"]
+    assert {(row["arm"], row["patients"]) for row in rows} == {("sample", 3), ("carry_forward", 3)}
+
+
+def eicu_like() -> dict:
+    """Twelve synthetic stays with eICU's recorded variables, no deaths or releases and unknown statics."""
+    stays = synthetic_cache(seed=4, subjects=12, stays=12)
+    recorded = [V.CONTINUOUS.index(n) for n in ("Heart Rate", "Systolic Blood Pressure", "Temperature", "Weight")]
+    keep = torch.zeros(len(V.CONTINUOUS), dtype=torch.bool)
+    keep[recorded] = True
+    stays["continuous_mask"] = stays["continuous_mask"] * keep
+    stays["continuous"] = torch.where(stays["continuous_mask"] > 0, stays["continuous"], torch.nan)
+    stays["binary"][..., [V.DEATH, V.RELEASE]] = 0.0
+    stays["static"][:, 1:3] = torch.nan
+    stays["time_hours"] = torch.arange(24).float().expand(12, -1).clone()
+    return stays
