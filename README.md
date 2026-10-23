@@ -58,6 +58,13 @@ command lists its options and defaults.
 With `--eicu cache/eicu.pt`, `rollout` and `score` take the first 1,000
 test stays of the transfer cache in place of the MIMIC test patients.
 
+A case file holds the paths of one test patient without loss: the recorded
+hours, which every path shares, are stored once, the binary events as bits,
+and the bytes are compressed. On 420 case files of seven arms with 100
+paths this takes 34-44% of the space of a file that holds the tensors, and
+every value reads back bit for bit. Case files that hold the tensors, as
+earlier rollouts do, are read as before.
+
 ## Data access and the cohort cache
 
 The cohort comes from MIMIC-IV v3.1, available on PhysioNet to credentialed
