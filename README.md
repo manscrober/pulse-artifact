@@ -406,15 +406,18 @@ python -m pulse score --rollouts runs/rollouts16 \
 
 ## Runtimes
 
-The laptop times were measured on an Apple M4 Max CPU with one thread.
-`build-cache` was timed over two rebuilds of the whole cohort, and `score`
-over both published path-count tables together (16 arm labels, including
-reading the case files). The second column is for an NVIDIA A30 GPU.
-Cache building, scoring and the tests run on the CPU only.
+The laptop times were measured on an Apple M4 Max CPU with one thread,
+except the concepts of the MIMIC Code Repository, which DuckDB built with
+four threads. `build-cache` was timed over one rebuild of the whole cohort
+from a DuckDB database whose large tables are stored in subject order, and
+`score` over both published path-count tables together (16 arm labels,
+including reading the case files). The second column is for an NVIDIA A30
+GPU. Cache building, scoring and the tests run on the CPU only.
 
 | step | Apple M4 Max CPU, one thread | NVIDIA A30 |
 |---|---|---|
-| `build-cache`, whole cohort | 12 to 15 minutes | CPU only |
+| concepts of the MIMIC Code Repository (`duckdb.sql`), four threads | about 1.5 minutes | CPU only |
+| `build-cache`, whole cohort | about 6 minutes | CPU only |
 | `train`, one epoch of each phase | pending | pending |
 | `rollout`, one call of 8 patients, 100 paths | per arm, below | pending |
 | `score`, both published path-count tables | about 4 minutes | CPU only |
@@ -448,20 +451,24 @@ calls of 8 that cover the 894 test patients.
 Exact reproduction has three levels.
 
 (a) **This code against the reference implementation, on the CPU.** The
-committed fixtures check data preparation, the hourly binning, the CNF,
-the model, the first training updates of every phase, the rollouts of
-every arm and the scorer bit for bit on synthetic data. On the local copy
-of MIMIC-IV and with the published weights, the cohort SQL selects exactly
-the stored cohort; preparation of the published cache reproduces every
-prepared tensor, the statistics and the covariance groups; rollouts of all
-nine arms for 8 test patients with 100 paths equal those of the reference
-implementation (the quantile-only and probability-only arms with the
-distribution-history weights, as their own published weights were not yet
-available); and so do the first training updates of the policy and of the
-sampled- and distribution-history models. With the weights of the component
-table, rollouts of all ten rows for 8 test patients with 100 paths equal
-those of the reference implementation, and on synthetic data so do every
-row's initial weights, outputs and first training updates.
+committed fixtures check data preparation, the hourly binning, the CNF, the
+model, the first training updates of every phase, the rollouts of every arm
+and the scorer bit for bit on synthetic data. On the local copy of MIMIC-IV
+and with the published weights, `sql/cohort.sql` selects exactly the stored
+cohort, also when the concepts are built afresh with the DuckDB scripts of
+the MIMIC Code Repository at release v3.0.1; a rebuilt cache equals the
+published one except for 11 continuous entries of 2 stays, which differ by
+one unit in the last place (point 1 below); preparation of the published
+cache reproduces every prepared tensor, the statistics and the covariance
+groups; rollouts of all nine arms for 8 test patients with 100 paths equal
+those of the reference implementation (the quantile-only and
+probability-only arms with the distribution-history weights, as their own
+published weights were not yet available); and so do the first training
+updates of the policy and of the sampled- and distribution-history models.
+With the weights of the component table, rollouts of all ten rows for 8 test
+patients with 100 paths equal those of the reference implementation, and on
+synthetic data so do every row's initial weights, outputs and first training
+updates.
 
 (b) **Published tables from saved rollouts.** The scorer reproduces every
 row of the published 100-path table and of the path-count table from the
