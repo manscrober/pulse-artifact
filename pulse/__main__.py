@@ -81,7 +81,11 @@ def _parser() -> argparse.ArgumentParser:
     score.add_argument("--rollouts", type=Path, default=ROLLOUTS)
     score.add_argument("--arms", nargs="+", required=True,
                        help="rollout directories under --rollouts, each an arm, a row or gtransformer, as NAME "
-                            "or NAME:M, M scoring only the first M paths of its rollouts")
+                            "or NAME:M, M scoring only the first M paths of its rollouts; carry_forward and "
+                            "training_mean name forecasts without a model")
+    score.add_argument("--targets", choices=("recorded", "all_hours"), default="recorded",
+                       help="score recorded values (the component table) or every forecast hour against the "
+                            "filled targets (the G-Transformer paper's predictive check)")
     score.add_argument("--origins", type=int, nargs="+", choices=ORIGINS, default=list(ORIGINS))
     score.add_argument("--resamples", type=int, default=2000)
     score.add_argument("--out", type=Path, required=True, help="JSON file for the scored rows")
@@ -258,15 +262,15 @@ def score(args) -> None:
     arms = {}
     for label in args.arms:
         name, _, limit = label.partition(":")
-        arms[label] = (args.rollouts / name, int(limit) if limit else None)
+        arms[label] = (None, None) if label in scoring.BASELINES else (args.rollouts / name, int(limit) if limit else None)
     cache = data.load_cache(args.cache)
     result = scoring.score(arms, cache, data.Protocol.load(args.protocol), origins=tuple(args.origins),
-                           resamples=args.resamples, pit=args.pit)
+                           resamples=args.resamples, pit=args.pit, targets=args.targets)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=1) + "\n")
     print(f"{len(result['rows'])} rows -> {args.out}")
     if args.binary_out:
-        panel = scoring.binary_panel({label: directory for label, (directory, _) in arms.items()}, cache,
+        panel = scoring.binary_panel({label: directory for label, (directory, _) in arms.items() if directory}, cache,
                                      data.Protocol.load(args.protocol), origins=tuple(args.origins))
         args.binary_out.parent.mkdir(parents=True, exist_ok=True)
         args.binary_out.write_text(json.dumps(panel, indent=1) + "\n")

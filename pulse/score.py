@@ -26,6 +26,16 @@ at least one hour before the origin's first forecast hour is skipped, and so
 is a patient for whom any arm has no case file; skipped positions leave gaps
 in the case numbering. A target point counts only if every arm's paths are
 finite there, so an arm's score depends on the arms scored with it.
+
+The target points are the recorded values (`targets="recorded"`, the
+component table) or every hour from the first forecast hour on
+(`targets="all_hours"`), the predictive check of the G-Transformer paper:
+there the filled target of every hour counts, so the vector RMSE of a
+patient sums the squared errors of all 37 variables in each hour. Two
+forecasts without a model can be scored as arms of one path (`BASELINES`):
+the last recorded row's filled target carried over every forecast hour, and
+the training mean. Neither is filled after death or release, as in the
+paper's appendix.
 """
 from __future__ import annotations
 
@@ -56,6 +66,11 @@ RMSE_EXCLUDED = ("Cumulative Fluids", "Fluid Balance in ICU", "Fluid Volume", "M
                  "Change in Weight")
 PIT_SEED = 20261005
 BINARY_SEED = 20261019
+TARGETS = ("recorded", "all_hours")
+# Paths [1, H, V] of a forecast without a model, from a patient's filled targets [T, V], the first
+# forecast row and the training mean [V].
+BASELINES = {"carry_forward": lambda y, first, mean: y[first - 1].expand(len(y) - first, -1)[None],
+             "training_mean": lambda y, first, mean: mean.to(y.dtype).expand(len(y) - first, -1)[None]}
 
 
 def _quantiles(sorted_samples: np.ndarray, probabilities) -> np.ndarray:
@@ -115,21 +130,28 @@ def fill_paths(continuous: torch.Tensor, binary: torch.Tensor, mean: torch.Tenso
                                [steps if r is None else r for r in release], mean)
 
 
-def collect(arms: dict[str, tuple[Path, int | None]], cache: dict, test_rows: np.ndarray, mean: torch.Tensor,
-            origin: int) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray], list[int]]:
-    """Targets [n, H, V], masks and filled paths [n, P, H, V] from the origin's first forecast hour on."""
+def collect(arms: dict[str, tuple[Path | None, int | None]], cache: dict, test_rows: np.ndarray,
+            mean: torch.Tensor, origin: int) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray], list[int]]:
+    """Targets [n, H, V], masks and filled paths [n, P, H, V] from the origin's first forecast hour on.
+
+    An arm without a directory is the baseline of `BASELINES` it is named after.
+    """
     first = data.first_forecast_row(origin)
     truth, masks, cases = [], [], []
     samples = {label: [] for label in arms}
+    directories = {label: Path(directory) / f"k{origin}" for label, (directory, _) in arms.items()
+                   if directory is not None}
     for case, row in enumerate(test_rows):
         death = _first(cache["binary"][row][:, V.DEATH])
         if death is not None and death <= data.last_recorded_row(origin):
             continue
-        directories = {label: Path(directory) / f"k{origin}" for label, (directory, _) in arms.items()}
         if not all(data.case_path(d, case).exists() for d in directories.values()):
             continue
         y, m = fill_truth(cache["continuous"][row].float(), cache["continuous_mask"][row], cache["binary"][row], mean)
         for label, (_, max_paths) in arms.items():
+            if label not in directories:
+                samples[label].append(BASELINES[label](y, first, mean).numpy())
+                continue
             paths = data.load_case(directories[label], case)
             filled = fill_paths(paths["continuous"][:max_paths], paths["binary"][:max_paths], mean)
             samples[label].append(filled[:, first:].numpy())
@@ -239,11 +261,13 @@ def _paired(row: dict, loss: dict[str, np.ndarray], arm: str, previous: str | No
     row["best"] = best
 
 
-def score(arms: dict[str, tuple[Path, int | None]], cache: dict, protocol: Protocol, origins=data.ORIGINS,
-          resamples: int = 2000, seed: int = 20261006, pit: bool = False) -> dict:
+def score(arms: dict[str, tuple[Path | None, int | None]], cache: dict, protocol: Protocol, origins=data.ORIGINS,
+          resamples: int = 2000, seed: int = 20261006, pit: bool = False, targets: str = "recorded") -> dict:
     """Score arms {label: (directory, first M paths or None)}; the first arm is the reference.
 
-    Each directory holds `k{origin}/case_XXXX.pt` for every origin. Rows give
+    Each directory holds `k{origin}/case_XXXX.pt` for every origin; an arm
+    without one is a baseline of `BASELINES`. `targets` picks the scored
+    points, one of `TARGETS`. Rows give
     the point estimate and the 2.5% and 97.5% bootstrap quantiles of each
     metric, and for every other arm the same for its difference from the
     reference. Each row also compares the arm's loss with the arm before it
@@ -255,6 +279,8 @@ def score(arms: dict[str, tuple[Path, int | None]], cache: dict, protocol: Proto
     """
     if protocol.cache_sha256 != cache["sha256"]:
         raise ValueError("the cache differs from the one the protocol was prepared from")
+    if targets not in TARGETS:
+        raise ValueError(f"targets are one of {TARGETS}")
     reference = next(iter(arms))
     mean = torch.tensor(protocol.mean)
     sd = np.array(protocol.sd)
@@ -262,6 +288,8 @@ def score(arms: dict[str, tuple[Path, int | None]], cache: dict, protocol: Proto
     rows = []
     for k in origins:
         y, mask, predictions, cases = collect(arms, cache, test_rows, mean, k)
+        if targets == "all_hours":
+            mask = np.ones_like(mask)
         stats = patient_statistics(y, mask, predictions, sd, k if pit else None)
         n = len(cases)
         rng = np.random.default_rng(seed + k)
@@ -292,7 +320,8 @@ def score(arms: dict[str, tuple[Path, int | None]], cache: dict, protocol: Proto
                         row["minus_reference_ci"] = [float(q) for q in np.quantile(d[1:], [.025, .975])]
                     _paired(row, loss, arm, list(arms)[i - 1] if i else None, best)
                     rows.append(row)
-    return {"reference": reference, "arms": {label: {"directory": str(d), "max_paths": m} for label, (d, m) in arms.items()},
+    return {"reference": reference, "targets": targets,
+            "arms": {label: {"directory": None if d is None else str(d), "max_paths": m} for label, (d, m) in arms.items()},
             "resamples": resamples, "seed": seed, "rows": rows}
 
 

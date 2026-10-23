@@ -73,5 +73,35 @@ def test_against_reference(inputs, expected):
     expected("binary_channels_by_arm", as_bytes(panel["channels_by_arm"]))
 
 
+def test_baselines_and_all_hours(inputs):
+    cache, protocol, _ = inputs
+    rows = data.select(cache["subject_ids"])["test"]
+    mean, sd = torch.tensor(protocol.mean), np.array(protocol.sd)
+    baselines = {"carry_forward": (None, None), "training_mean": (None, None)}
+    first = data.first_forecast_row(6)
+    y, mask, predictions, cases = score.collect(baselines, cache, rows, mean, 6)
+    # Baselines need no case file, so case 6 counts; cases 1 and 2 die before the origin.
+    assert {0, 3, 6, 7} <= set(cases) and not {1, 2} & set(cases)
+    for i, case in enumerate(cases):
+        row = rows[case]
+        filled, _ = score.fill_truth(cache["continuous"][row].float(), cache["continuous_mask"][row],
+                                     cache["binary"][row], mean)
+        assert np.array_equal(predictions["carry_forward"][i, 0], np.tile(filled[first - 1].numpy(), (len(y[i]), 1)))
+        assert np.array_equal(predictions["training_mean"][i, 0], np.tile(mean.numpy(), (len(y[i]), 1)))
+    # The predictive check of the G-Transformer paper: per patient, the squared standardised errors of
+    # all variables are summed in each hour, averaged over the hours and square-rooted.
+    stats = score.patient_statistics(y, np.ones_like(mask), predictions, sd)
+    errors = (predictions["carry_forward"][:, 0] - y) / sd
+    assert np.allclose(stats["carry_forward_vector_37"], np.sqrt(np.nansum(errors ** 2, -1).mean(1)))
+    assert (stats["counts"] == np.isfinite(y).sum(1)).all() and stats["counts"].sum() > mask.sum()
+    result = score.score(baselines, cache, protocol, origins=(6,), resamples=20, targets="all_hours")
+    vector = next(r for r in result["rows"] if r["metric"] == "vector_rmse" and r["panel"] == 37
+                  and r["arm"] == "carry_forward")
+    assert result["targets"] == "all_hours" and vector["paths"] == 1
+    assert vector["estimate"] == pytest.approx(stats["carry_forward_vector_37"].mean())
+    with pytest.raises(ValueError, match="targets"):
+        score.score(baselines, cache, protocol, targets="dense")
+
+
 def test_primary_rmse_panel_has_25_variables():
     assert len([v for v in score.PANELS[37] if score.V.CONTINUOUS[v] not in score.RMSE_EXCLUDED]) == 25

@@ -178,8 +178,8 @@ def test_score_reads_path_limits_from_labels(monkeypatch, tmp_path):
     monkeypatch.setattr("pulse.data.load_cache", lambda path: "cache")
     monkeypatch.setattr("pulse.data.Protocol.load", lambda path: "protocol")
 
-    def score(arms, cache, protocol, origins, resamples, pit):
-        seen.update(arms=arms, origins=origins, resamples=resamples, pit=pit)
+    def score(arms, cache, protocol, origins, resamples, pit, targets):
+        seen.update(arms=arms, origins=origins, resamples=resamples, pit=pit, targets=targets)
         return {"rows": [{"arm": label} for label in arms]}
 
     monkeypatch.setattr(scoring, "score", score)
@@ -188,7 +188,12 @@ def test_score_reads_path_limits_from_labels(monkeypatch, tmp_path):
               "--out", str(out)])
     assert seen["arms"] == {"sample": (tmp_path / "sample", None), "sampled_state:4": (tmp_path / "sampled_state", 4)}
     assert seen["origins"] == (2, 6) and seen["resamples"] == 10 and not seen["pit"]
+    assert seen["targets"] == "recorded"
     assert json.loads(out.read_text())["rows"][1]["arm"] == "sampled_state:4"
+    cli.main(["score", "--rollouts", str(tmp_path), "--arms", "carry_forward", "sample", "--targets", "all_hours",
+              "--out", str(out)])
+    assert seen["arms"] == {"carry_forward": (None, None), "sample": (tmp_path / "sample", None)}
+    assert seen["targets"] == "all_hours"
 
 
 def test_score_writes_the_binary_panel_on_request(monkeypatch, tmp_path):
@@ -203,7 +208,7 @@ def test_score_writes_the_binary_panel_on_request(monkeypatch, tmp_path):
 
     monkeypatch.setattr(scoring, "binary_panel", panel)
     out = tmp_path / "binary.json"
-    cli.main(["score", "--rollouts", str(tmp_path), "--arms", "sample:4", "--origins", "6", "--pit",
+    cli.main(["score", "--rollouts", str(tmp_path), "--arms", "sample:4", "training_mean", "--origins", "6", "--pit",
               "--out", str(tmp_path / "table.json"), "--binary-out", str(out)])
     assert seen == {"arms": {"sample:4": tmp_path / "sample"}, "origins": (6,)}
     assert json.loads(out.read_text())["rows"] == [1, 2]
