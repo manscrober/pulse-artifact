@@ -12,8 +12,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Only building the cohort from the MIMIC-IV database needs PostgreSQL access.
-cohort = ["psycopg2-binary==2.9.11"]
+# Only building the cohort from the MIMIC-IV database needs DuckDB.
+cohort = ["duckdb==2.0.0"]
 test = ["pytest"]
 
 [build-system]

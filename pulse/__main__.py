@@ -7,7 +7,7 @@
     score        score saved rollouts against the recorded test values
 
 Each command imports only the modules it needs, so that `build-cache`
-alone requires the PostgreSQL driver.
+alone requires the DuckDB driver.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import argparse
 import json
 from pathlib import Path
 
-DSN = "dbname=mimiciv host=localhost user=postgres"
+DATABASE = Path("mimiciv.duckdb")
 CACHE = Path("cache/sepsis.pt")
 CHECKPOINTS = Path("runs/checkpoints")
 ROLLOUTS = Path("runs/rollouts")
@@ -31,7 +31,8 @@ def _parser() -> argparse.ArgumentParser:
 
     build = commands.add_parser("build-cache", formatter_class=from_defaults,
                                 help="bin the sepsis cohort from a MIMIC-IV database into a cache")
-    build.add_argument("--dsn", default=DSN, help="PostgreSQL connection string")
+    build.add_argument("--database", type=Path, default=DATABASE,
+                       help="DuckDB database with MIMIC-IV and its derived concepts")
     build.add_argument("--out", type=Path, default=CACHE)
 
     train = commands.add_parser("train", formatter_class=from_defaults,
@@ -282,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build-cache":
         from pulse import cohort
 
-        print(cohort.build_cache(args.dsn, args.out))
+        print(cohort.build_cache(args.database, args.out))
     else:
         {"train": train, "rollout": rollout, "score": score}[args.command](args)
     return 0

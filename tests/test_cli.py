@@ -215,7 +215,7 @@ def test_score_writes_the_binary_panel_on_request(monkeypatch, tmp_path):
 
 
 def test_commands_import_without_the_database_driver():
-    hide = "import sys; sys.modules['psycopg2'] = None; from pulse.__main__ import main; main(['score', '--help'])"
+    hide = "import sys; sys.modules['duckdb'] = None; from pulse.__main__ import main; main(['score', '--help'])"
     run = subprocess.run([sys.executable, "-c", hide], cwd=Path(__file__).resolve().parent.parent,
                          capture_output=True, text=True)
     assert run.returncode == 0 and "--arms" in run.stdout

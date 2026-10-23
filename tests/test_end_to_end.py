@@ -7,6 +7,7 @@ two paths per patient.
 import json
 import types
 
+import pandas as pd
 import pytest
 
 from pulse import cohort, data
@@ -22,13 +23,14 @@ SPLIT = {"train": 8, "val": 4, "test": 3}
 def test_build_train_roll_out_and_score(monkeypatch, tmp_path):
     stays = source_stays(seed=2, count=sum(SPLIT.values()) + 1)
     monkeypatch.setattr(data, "SPLIT", SPLIT)
-    monkeypatch.setattr(cohort, "_connect", lambda dsn: types.SimpleNamespace(close=lambda: None))
-    monkeypatch.setattr(cohort, "cohort_subjects", lambda conn: (1, sorted(s["subject_id"] for _, s in stays)))
-    monkeypatch.setattr(cohort, "load_stays", lambda conn, cohort_id, subjects: [
+    monkeypatch.setattr(cohort, "_connect", lambda database: types.SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(cohort, "cohort_stays", lambda conn: pd.DataFrame(
+        {"subject_id": [s["subject_id"] for _, s in stays], "stay_id": [s["stay_id"] for _, s in stays]}))
+    monkeypatch.setattr(cohort, "load_stays", lambda conn, stay_ids, subjects: [
         stay for stay in stays if stay[1]["subject_id"] in subjects])
     cache, checkpoints, rollouts = tmp_path / "cache.pt", tmp_path / "checkpoints", tmp_path / "rollouts"
 
-    main(["build-cache", "--dsn", "unused", "--out", str(cache)])
+    main(["build-cache", "--database", "unused", "--out", str(cache)])
     main(["train", "--cache", str(cache), "--out", str(checkpoints), "--phases", "policy", "sample",
           "distribution", "--epochs", "1", "--batch", "4", "--micro", "2"])
     assert sorted(p.name for p in checkpoints.iterdir()) == ["distribution.pt", "policy.pt", "protocol.json", "sample.pt"]

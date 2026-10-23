@@ -21,11 +21,11 @@ libraries.
 ```
 python -m venv .venv
 . .venv/bin/activate
-pip install -e ".[test]"            # add ",cohort" to build the cache from PostgreSQL
+pip install -e ".[test]"            # add ",cohort" to build the cache from MIMIC-IV
 pytest
 ```
 
-Only building the cohort cache needs the PostgreSQL driver, which the
+Only building the cohort cache needs the DuckDB driver, which the
 `cohort` extra installs; every other part of the package and all tests run
 without it. The test suite takes about a minute on one CPU and includes an
 end-to-end run of every command on a tiny synthetic cohort
@@ -49,7 +49,7 @@ command lists its options and defaults.
 
 | command | reads | writes |
 |---|---|---|
-| `build-cache` | the MIMIC-IV database | the cohort cache, `cache/sepsis.pt` |
+| `build-cache` | the MIMIC-IV DuckDB database | the cohort cache, `cache/sepsis.pt` |
 | `train` | the cache | `<phase>.pt`, `<row>.pt` and `protocol.json` in `runs/checkpoints` |
 | `rollout` | the cache and the checkpoints | `runs/rollouts/<arm or row>/k<origin>/case_XXXX.pt` |
 | `score` | the cache, the protocol and the rollouts | one JSON file of scored rows |
@@ -57,43 +57,31 @@ command lists its options and defaults.
 ## Data access and the cohort cache
 
 The cohort comes from MIMIC-IV v3.1, available on PhysioNet to credentialed
-users who have signed the data use agreement. Load MIMIC-IV into PostgreSQL
-with the build scripts of the MIMIC Code Repository
-(`mimic-iv/buildmimic/postgres`) and build its concepts
-(`mimic-iv/concepts_postgres`) into the schema `mimiciv_derived`. The
-scripts here read the concepts `antibiotic`, `bg`, `chemistry`,
-`complete_blood_count`, `enzyme`, `gcs`, `icustay_hourly`, `vitalsign`,
-`urine_output_rate`, `ventilation`, `dopamine`, `dobutamine`, `epinephrine`
-and `norepinephrine`, and the tables `sofa` and `sepsis3` must exist.
-
-**The scripts change the database they run on.** They drop and recreate
-`mimiciv_derived.suspicion_of_infection`, replace the contents of
-`mimiciv_derived.sofa` and `mimiciv_derived.sepsis3` with the versions used
-for the paper, add indexes on `mimiciv_icu.inputevents` and
-`mimiciv_derived.sepsis3`, and create `public.d_cohorts` and
-`public.cohort`. Run them on a database whose derived concepts nothing else
-depends on, or rebuild the concepts afterwards.
-
-Run the three SQL scripts in this order, then build the cache:
+users who have signed the data use agreement. `build-cache` reads a DuckDB
+database that holds MIMIC-IV under the schemas `mimiciv_hosp` and
+`mimiciv_icu` and the derived concepts of the MIMIC Code Repository under
+`mimiciv_derived`. The DuckDB scripts of the MIMIC Code Repository at
+release v3.0.1 build it: `mimic-iv/buildmimic/duckdb/import_duckdb.sh`
+loads the PhysioNet files, and `mimic-iv/concepts_duckdb/duckdb.sql`
+builds the concepts.
 
 ```
-psql -d mimiciv -f sql/suspicion_of_infection.sql
-psql -d mimiciv -f sql/sofa.sql        # 10 to 30 minutes
-psql -d mimiciv -f sql/cohort.sql
-python -m pulse build-cache --dsn "dbname=mimiciv host=localhost user=postgres" --out cache/sepsis.pt
+git clone --branch v3.0.1 https://github.com/MIT-LCP/mimic-code
+cd mimic-code/mimic-iv/buildmimic/duckdb
+./import_duckdb.sh /path/to/physionet.org/files/mimiciv/3.1 /path/to/mimiciv.duckdb
+cd ../../concepts_duckdb
+duckdb /path/to/mimiciv.duckdb -c ".read duckdb.sql"
+cd /path/to/pulse
+python -m pulse build-cache --database /path/to/mimiciv.duckdb --out cache/sepsis.pt
 ```
 
-The suspicion-of-infection, SOFA and Sepsis-3 queries are the concepts of
-the MIMIC Code Repository at release v3.0.0 (unchanged through v3.0.1),
-redistributed under its MIT licence (`sql/LICENSE-mimic-code`); the header
-of each script names its source file and what was changed for the paper.
-`sql/suspicion_of_infection.sql` is copied without change. `sql/sofa.sql`
-computes the hourly SOFA score from the derived tables. `sql/cohort.sql`
-recomputes Sepsis-3 (a SOFA score of at least 2 with suspected infection),
-keeps ICU stays with an emergency department stay and a documented pre-ICU
-fluid volume, and stores the result under the name `GT-Sepsis-Paper` in the
-tables `public.d_cohorts` and `public.cohort`, which it creates when they
-are absent.
+`sql/cohort.sql` selects the cohort: ICU stays that meet Sepsis-3 (the
+concept `mimiciv_derived.sepsis3`, a SOFA score of at least 2 with suspected
+infection) and have an emergency department stay and a documented pre-ICU
+fluid volume. The query only reads, and `build-cache` opens the database
+read-only, so the database is left as it was. The DuckDB command line runs
+the same query on its own:
+`duckdb -readonly /path/to/mimiciv.duckdb < sql/cohort.sql`.
 
 `build-cache` reads the cohort 25 subjects at a time, bins every ICU stay
 into 24 hourly rows counted from ICU admission (`pulse.hourly`), and writes
@@ -533,7 +521,7 @@ training on other devices.
    kept from the published cohort.
 8. The SOFA score among the variables is a partial score from SpO2,
    platelets, mean blood pressure and creatinine. The full SOFA score of
-   `sql/sofa.sql` selects the cohort.
+   the Sepsis-3 concept selects the cohort.
 9. Training statistics recomputed on another platform can differ in the
    last bit: the protocol saved by the training run differs from a local
    preparation of the same cache in one static mean by one unit in the last
@@ -553,7 +541,6 @@ training on other devices.
 no check of the reproduction measured, and then remove this section.]**
 
 - The cohort was drawn from MIMIC-IV v3.1.
-- `sql/sofa.sql` takes 10 to 30 minutes.
 - Each published training phase took under 3 hours on an NVIDIA A30 GPU.
 - A rebuilt cache is the same on every rebuild. This follows from the total
   sort key of point 1 under "Reproduction and its limits"; one rebuild was
@@ -578,7 +565,8 @@ tests fail on a release.
   variables and fill hours after death or release.
 - `pulse/hourly.py` bins the records of one ICU stay into 24 hourly rows and
   computes its static variables.
-- `pulse/cohort.py` reads the cohort from PostgreSQL and writes the cache.
+- `pulse/cohort.py` reads the cohort from a DuckDB database and writes the
+  cache.
 - `pulse/data.py` holds the cache format, the split, preparation, the
   protocol and the files of sampled paths.
 - `pulse/cnf.py` holds the conditional normalising flow of one continuous
@@ -600,7 +588,7 @@ tests fail on a release.
   the test patients.
 - `pulse/score.py` computes the aligned scores and the paired bootstrap.
 - `pulse/__main__.py` is the command line, `python -m pulse`.
-- `sql/` holds the three scripts that create the cohort in PostgreSQL.
+- `sql/cohort.sql` is the query that selects the cohort.
 - `tests/` holds the tests, a generator of synthetic cohorts
   (`tests/synthetic.py`) and the reference digests (`tests/fixtures/`).
   `tests/test_tree.py` checks that no file or commit message contains local

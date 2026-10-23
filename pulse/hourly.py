@@ -175,7 +175,7 @@ def _sofa(value: dict, mask: dict, t: int) -> int:
 
     The respiratory component uses SpO2 in place of PaO2/FiO2, and the
     liver and central nervous system components are left out, so this score
-    differs from the full SOFA of `sql/sofa.sql`, which selects the cohort.
+    differs from the full SOFA of the Sepsis-3 concept, which selects the cohort.
     """
     score = 0
     if mask["spO2"][t] > 0:
