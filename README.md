@@ -168,8 +168,9 @@ Every phase uses Adam at a learning rate of $10^{-3}$ for the policy and
 $5 \times 10^{-4}$ for the patient models, gradient clipping at norm 1, a
 step schedule that multiplies the learning rate by 0.3 halfway through,
 batches of 32 stays in microbatches of 8, at most 50 epochs, and early
-stopping after 5 epochs without improvement once 10 epochs have run. The
-epoch order is drawn from a seed fixed per epoch. Only the weights of the
+stopping after 5 epochs without improvement once 10 epochs have run;
+`--epochs`, `--patience` and `--min-epochs` change the last three, and the
+step of the schedule moves with `--epochs`. The epoch order is drawn from a seed fixed per epoch. Only the weights of the
 epoch with the lowest validation loss are written, to `<out>/<phase>.pt`,
 and the protocol to `<out>/protocol.json`. Patient-model phases read the
 policy, so `--phases` must name `policy` first when it names it at all;
@@ -209,6 +210,7 @@ python -m pulse train --out runs/checkpoints --phases quantile_only --device cud
 python -m pulse train --out runs/checkpoints --phases gtransformer --device cuda      # the baseline
 python -m pulse train --out runs/checkpoints --rows point gaussian flow               # rows; reads policy.pt
 python -m pulse train --out runs/cotrained --rows anchor --cotrain-eicu cache/eicu.pt  # with eICU stays; reads policy.pt
+python -m pulse train --out runs/matched --rows flow --epochs 156 --patience 16 --min-epochs 31  # see below
 ```
 
 eICU records seven vital signs hour by hour and none of the other MIMIC
@@ -220,6 +222,14 @@ learn from them that laboratory values are never measured
 every hour; a training stay counts it as recorded in its first hour only,
 as MIMIC records weight in 2% of training rows (`pulse.eicu.ONCE_PER_STAY`).
 A co-trained checkpoint lists the eICU cache digest under `sources`.
+
+An epoch passes over every training stay, so with the eICU stays of the
+transfer cache an epoch has 698 updates against 224 on MIMIC alone, and the
+stopping rule, which counts epochs, lets a co-trained fit run about three
+times as many updates as a MIMIC-only one. The last command above trains a
+MIMIC-only fit whose rule counts the updates of a co-trained one (50, 5 and
+10 epochs multiplied by 698/224); the co-training appendix of the
+camera-ready paper (Appendix A.9) compares the co-trained flow with it.
 
 A checkpoint is a dictionary saved with `torch.save` holding the model
 weights (`state`), the validation history of the training run (`history`,

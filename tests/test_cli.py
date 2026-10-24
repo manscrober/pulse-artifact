@@ -43,6 +43,9 @@ def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp
     with pytest.raises(SystemExit, match="policy.pt is missing"):
         cli.main(["train", "--out", str(tmp_path / "empty"), "--phases", "quantile_only"])
     assert len(calls) == 2 and len(prepared) == 1  # refused lists prepare nothing
+    cli.main(["train", "--cache", "c.pt", "--out", str(tmp_path), "--phases", "policy", "--epochs", "156",
+              "--patience", "16", "--min-epochs", "31"])
+    assert calls[-1][4] == T.Settings(epochs=156, patience=16, min_epochs=31)
     cli.main(["train", "--cache", "c.pt", "--out", str(tmp_path / "empty"), "--phases", T.BASELINE])
     assert calls[-1][:2] == (T.BASELINE, None)  # the baseline does not read the policy
 

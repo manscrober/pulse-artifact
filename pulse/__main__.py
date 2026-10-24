@@ -65,6 +65,10 @@ def _parser() -> argparse.ArgumentParser:
     train.add_argument("--epochs", type=int, default=None, help="default: the published 50")
     train.add_argument("--batch", type=int, default=None, help="default: the published 32")
     train.add_argument("--micro", type=int, default=None, help="default: the published 8")
+    train.add_argument("--patience", type=int, default=None,
+                       help="epochs without a lower validation loss that stop a fit; default: the published 5")
+    train.add_argument("--min-epochs", type=int, default=None,
+                       help="epochs that run before a fit can stop; default: the published 10")
 
     rollout = commands.add_parser("rollout", formatter_class=from_defaults,
                                   help="roll out every test patient for arms or rows")
@@ -172,7 +176,8 @@ def train(args) -> None:
     from pulse.rows import ROWS
 
     settings = replace(T.Settings(), **{k: v for k, v in (("epochs", args.epochs), ("batch", args.batch),
-                                                          ("micro", args.micro)) if v is not None})
+                                                          ("micro", args.micro), ("patience", args.patience),
+                                                          ("min_epochs", args.min_epochs)) if v is not None})
     phases = args.phases or ([] if args.rows else list(T.PHASES))
     known = list(T.PHASES) + [T.BASELINE]
     unknown = [p for p in phases if p not in known]
