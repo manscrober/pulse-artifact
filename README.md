@@ -216,8 +216,10 @@ variables. Its training stays therefore count in the loss only for what
 they record: the observation, timing and outcome terms of every other
 variable and outcome are left out, so that the observation head does not
 learn from them that laboratory values are never measured
-(`pulse.train.pulse_loss`). A co-trained checkpoint lists the eICU cache
-digest under `sources`.
+(`pulse.train.pulse_loss`). The eICU cohort writes one weight per stay into
+every hour; a training stay counts it as recorded in its first hour only,
+as MIMIC records weight in 2% of training rows (`pulse.eicu.ONCE_PER_STAY`).
+A co-trained checkpoint lists the eICU cache digest under `sources`.
 
 A checkpoint is a dictionary saved with `torch.save` holding the model
 weights (`state`), the validation history of the training run (`history`,
