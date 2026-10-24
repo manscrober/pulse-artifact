@@ -184,7 +184,7 @@ optimisation above with the loss of a point head: the squared error over
 recorded values, the binary cross-entropy and the cross-entropy of whether
 each variable is recorded.
 
-The rows of the paper's component table (Table 2) are settings of
+The rows of the component table (Table 3 of the camera-ready paper) are settings of
 `pulse/rows.py` and train with `--rows`. Each row names a PULSE variant
 (`pulse.model.Architecture`: the continuous head, the time encoding, the
 timing head and the event-time inputs), its rollout arm and, when it
@@ -258,9 +258,10 @@ reads the hourly rows generated so far, the form it is trained on, the
 binary outcomes it draws become the next hour's, and its point predictions
 get static Gaussian noise fitted to hour-to-hour changes of the validation
 patients. With `--policy-at-last-event` the policy is read at the last row
-of each event history, as in the camera-ready component table; without
-it, at the last of the 24 padded rows, as in the runs published before 19
-October. `--rows` rolls out rows of the component table, each with its own
+of each event history, as in Table A.8 and Appendices A.8 and A.9 of the
+camera-ready paper; without it, at the last of the 24 padded rows, as in
+the runs published before 19 October, which include those behind the
+camera-ready component table (Table 3). `--rows` rolls out rows of the component table, each with its own
 variant, arm and weights, into `<out>/<row>/`; rows always read the policy
 at the last event, and the four rows with a point head get the same static
 noise as the baseline. The settings, together with the SHA-256 digests of
@@ -318,10 +319,10 @@ The blocks below assume the cache in `cache/sepsis.pt` and checkpoints in
 weights with their `protocol.json`). Each rollout command writes both
 origins.
 
-Table 2 of the camera-ready paper, the cumulative component comparison,
-with its appendix companions: Table A.33 repeats it at origin 2, Table A.34
-gives the paired changes against the row above and Table A.35 the binary
-outcome scores. The commands train the nine weight sets of the ten rows
+Table 3 of the camera-ready paper, the cumulative component comparison,
+with its appendix companions: Table A.6 repeats it at origin 2 and Table
+A.7 gives the paired changes against the row above; the binary outcome
+scores give its AUROC column. The commands train the nine weight sets of the ten rows
 into a directory of their own, roll out every row with 100 paths, and
 score the rows in the order of the table, so the point row is the
 reference and every row is also compared with the row above:
@@ -348,12 +349,76 @@ python -m pulse score --protocol runs/rows/protocol.json --eicu cache/eicu.pt --
     carry_forward --out tables/components_eicu.json
 ```
 
-**[AUTHOR DECISION PENDING: the expected numbers of Table 2. The text of
-19 October prints runs made before the policy fix of that day. The scorer
-reproduces the scores of the runs after the fix from their saved rollouts:
-the binary outcome panel bit for bit and every aligned score within float64
-rounding (at most 7.6e-16). Add the numbers of the table the paper prints
-before release.]**
+Rolled out on CUDA from the weights of the component table with the
+policy of rows 1 to 7, these commands give the scores of Table A.8 of the
+camera-ready paper: recorded targets of 891 and 892 test patients from
+origins 6 and 2 and 100 paths, with `vector_rmse` (the RMSE of the path
+mean over the 37 variables, defined under the path-count table below),
+`nrmse` (normalised over the 25 channels of `pulse.score.RMSE_EXCLUDED`),
+`crps` and `coverage90`. Rollouts on another device and weights trained
+anew agree only within Monte Carlo and training variability (level (c)
+under "Reproduction and its limits"); a second fit of rows 7 and 8 moved
+the RMSE of the path mean by up to 0.067 (Appendix A.9 of the
+camera-ready paper).
+
+Origin hour 6:
+
+| row | RMSE of path mean | normalised RMSE | CRPS | 90% coverage |
+|---|---|---|---|---|
+| `point` | 3.734 | 0.861 | 0.4070 | 0.834 |
+| `continuous_time` | 3.926 | 0.882 | 0.4185 | 0.834 |
+| `timing_head` | 4.084 | 0.922 | 0.4255 | 0.844 |
+| `event_inputs` | 4.119 | 1.016 | 0.4255 | 0.849 |
+| `gaussian` | 3.658 | 0.849 | 0.3976 | 0.781 |
+| `mixture` | 3.709 | 0.865 | 0.3916 | 0.773 |
+| `flow` | 3.635 | 0.856 | 0.3911 | 0.778 |
+| `anchor` | 3.675 | 0.875 | 0.4004 | 0.807 |
+| `sobol` | 3.655 | 0.866 | 0.3997 | 0.808 |
+| `feedback` | 3.678 | 0.875 | 0.4028 | 0.818 |
+
+Origin hour 2:
+
+| row | RMSE of path mean | normalised RMSE | CRPS | 90% coverage |
+|---|---|---|---|---|
+| `point` | 4.184 | 0.986 | 0.4821 | 0.806 |
+| `continuous_time` | 4.405 | 1.004 | 0.4969 | 0.804 |
+| `timing_head` | 4.650 | 1.109 | 0.5078 | 0.816 |
+| `event_inputs` | 4.632 | 1.121 | 0.5038 | 0.815 |
+| `gaussian` | 4.283 | 0.985 | 0.4859 | 0.799 |
+| `mixture` | 4.195 | 1.001 | 0.4674 | 0.783 |
+| `flow` | 4.172 | 0.994 | 0.4694 | 0.792 |
+| `anchor` | 4.267 | 0.995 | 0.4827 | 0.836 |
+| `sobol` | 4.230 | 0.983 | 0.4817 | 0.835 |
+| `feedback` | 4.232 | 0.990 | 0.4830 | 0.842 |
+
+Tables 3, A.6 and A.7 of the camera-ready paper print the runs of 14 to 19
+October, made before the policy read was corrected: they read the policy's
+decision at the last of the 24 padded rows, where the simulated vasopressor
+switches far more often than recorded ones do (Appendix A.7 of the
+camera-ready paper), and rows 8 to 10 use a second policy fit, trained with
+the anchor row. `score` reproduces every estimate and interval of those
+tables from their saved rollouts (level (b)). `rollout --rows` reads the
+policy at the last event only, so the commands above do not regenerate
+those rollouts.
+
+Appendix A.9 of the camera-ready paper refits rows 7 and 8 on MIMIC alone
+and with the eICU training stays, and the flow of row 7 on MIMIC alone with
+the stopping rule of a co-trained fit counted in updates (see "Model,
+training and rollouts"). Each output directory starts with a copy of
+`policy.pt` and `protocol.json` of `runs/rows`; each fit is then rolled out
+and scored on the MIMIC test patients and on the eICU stays as above:
+
+```
+python -m pulse train --out runs/mimic --rows flow anchor
+python -m pulse train --out runs/cotrained --rows flow anchor --cotrain-eicu cache/eicu.pt
+python -m pulse train --out runs/matched --rows flow --epochs 156 --patience 16 --min-epochs 31
+python -m pulse rollout --checkpoints runs/cotrained --out runs/cotrained/rollouts --paths 100 --rows flow anchor
+python -m pulse rollout --checkpoints runs/cotrained --eicu cache/eicu.pt --out runs/cotrained/eicu --paths 100 \
+    --rows flow anchor
+```
+
+The appendix also scores the paths of patients still alive at each scored
+hour; that rule is not part of `score`.
 
 Table 1 of the submitted paper, 100 paths per patient against sampled
 history.
