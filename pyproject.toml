@@ -3,6 +3,8 @@ name = "pulse"
 version = "1.0.0"
 description = "PULSE: probabilistic ICU trajectory simulation with distribution feedback"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "torch==2.13.0",
     "numpy==2.3.4",
@@ -17,7 +19,7 @@ cohort = ["duckdb==2.0.0"]
 test = ["pytest"]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

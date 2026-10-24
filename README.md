@@ -757,3 +757,9 @@ tests fail on a release.
   `tests/test_tree.py` checks that no file or commit message contains local
   paths, job numbers, private commit hashes or internal names, and that a
   release holds no open placeholder.
+
+## License
+
+The code is released under the MIT License (`LICENSE`). MIMIC-IV and
+eICU are not part of this repository; their data use agreements apply to
+every cohort cache built from them.
