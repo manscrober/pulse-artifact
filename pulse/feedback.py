@@ -252,16 +252,17 @@ class FeedbackPULSE(nn.Module):
         return self.pulse(history, additions=self.additions(descriptors, quantiles, probabilities))
 
 
-def build_pulse(protocol: Protocol, train_binary: torch.Tensor,
-                architecture: Architecture = Architecture()) -> FeedbackPULSE:
+def build_pulse(protocol: Protocol, train_binary: torch.Tensor, architecture: Architecture = Architecture(),
+                known: torch.Tensor | None = None) -> FeedbackPULSE:
     """PULSE as trained: seeded construction, binary heads at training log-odds, then adapters.
 
     Every model gets the adapters, whether or not its arm reads descriptors,
-    as in the reference, so construction draws the same weights.
+    as in the reference, so construction draws the same weights. `known`
+    marks the outcomes each training stay's source records.
     """
     torch.manual_seed(SEED)
     core = pulse_model(protocol, architecture)
-    core.set_binary_biases(core.binary_initial_logits(train_binary))
+    core.set_binary_biases(core.binary_initial_logits(train_binary, known))
     return FeedbackPULSE(core)
 
 

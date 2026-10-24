@@ -6,6 +6,8 @@ vital sign. `test_part` maps the first `TRANSFER_STAYS` of their test stays
 onto the MIMIC variables, filled and scaled with the training statistics of
 the MIMIC protocol as the MIMIC test patients are; `python -m pulse rollout
 --eicu` rolls them out and `python -m pulse score --eicu` scores them.
+`cotrain` adds the eICU training stays, mapped the same way, to the MIMIC
+training part (`python -m pulse train --cotrain-eicu`).
 
 A stay has sepsis when its APACHE admission diagnosis or one of its
 diagnosis strings contains a sepsis term, or a diagnosis code, stripped of
@@ -36,6 +38,7 @@ published cohort.
 """
 from __future__ import annotations
 
+import dataclasses
 import re
 from pathlib import Path
 
@@ -69,6 +72,8 @@ PERIODIC = {"Heart Rate": "heartrate", "Systolic Blood Pressure": "systemicsysto
             "Temperature": "temperature", "Respiratory Rate": "respiration", "spO2": "sao2"}
 APERIODIC = {"Systolic Blood Pressure": "noninvasivesystolic", "Diastolic Blood Pressure": "noninvasivediastolic",
              "Mean Blood Pressure": "noninvasivemean"}
+# Binary outcomes the cohort never records.
+UNRECORDED_OUTCOMES = ("Cumulative Edema",)
 
 
 def _connect():
@@ -255,6 +260,12 @@ def test_rows(cache: dict, limit: int = TRANSFER_STAYS) -> np.ndarray:
     return np.random.default_rng(SPLIT_SEED).permutation(n)[sum(_sizes(n)):][:limit]
 
 
+def training_rows(cache: dict) -> np.ndarray:
+    """Cache rows of the training stays of the split."""
+    n = len(cache["stay_ids"])
+    return np.random.default_rng(SPLIT_SEED).permutation(n)[:_sizes(n)[0]]
+
+
 def test_part(cache: dict, protocol: data.Protocol, limit: int = TRANSFER_STAYS) -> data.Part:
     """The first `limit` test stays as a part filled and scaled with the protocol's MIMIC training statistics.
 
@@ -262,11 +273,45 @@ def test_part(cache: dict, protocol: data.Protocol, limit: int = TRANSFER_STAYS)
     records no end-stage renal failure and no congestive heart failure, so
     the models never saw either; both are 0, as in the published transfer.
     """
+    return _mapped_part(cache, protocol, test_rows(cache, limit))
+
+
+def training_part(cache: dict, protocol: data.Protocol) -> data.Part:
+    """The training stays mapped as `test_part` maps the test stays, with what eICU records.
+
+    `observable` is one for the vital signs of `PERIODIC` and `outcomes_known`
+    is one except for `UNRECORDED_OUTCOMES`, so the training loss leaves the
+    observation and timing terms of every other variable, and the outcome
+    terms of those outcomes, out (`pulse.train.pulse_loss`). The weight is
+    a value in every hour but no hourly record: the cohort copies the
+    admission weight into each hour.
+    """
+    part = _mapped_part(cache, protocol, training_rows(cache))
+    n = len(part["continuous"])
+    observable = torch.zeros(n, len(V.CONTINUOUS))
+    observable[:, [V.CONTINUOUS.index(name) for name in PERIODIC]] = 1.0
+    known = torch.ones(n, len(V.BINARY))
+    known[:, [V.BINARY.index(name) for name in UNRECORDED_OUTCOMES]] = 0.0
+    return {**part, "observable": observable, "outcomes_known": known}
+
+
+def cotrain(prepared: data.Prepared, cache: dict) -> data.Prepared:
+    """`prepared` with the eICU training stays of `cache` after its MIMIC training patients.
+
+    Validation and test parts stay MIMIC's, so the best epoch is the one
+    that forecasts the MIMIC validation patients best, and the statistics
+    stay the protocol's. The eICU cache digest joins `prepared.sources`.
+    """
+    train = data.concatenate([prepared.train, training_part(cache, prepared.protocol)])
+    return dataclasses.replace(prepared, train=train, sources=prepared.sources + (cache["sha256"],))
+
+
+def _mapped_part(cache: dict, protocol: data.Protocol, rows: np.ndarray) -> data.Part:
+    """The stays of `rows` as a part filled and scaled with the protocol's MIMIC training statistics."""
     x = cache["continuous"].float()
     mask = cache["continuous_mask"].bool() & torch.isfinite(x)
     static_mean, static_sd = torch.tensor(protocol.static_mean), torch.tensor(protocol.static_sd)
     static = cache["static"].float()
     static = torch.where(torch.isnan(static), static_mean, static)
     static[:, [V.STATIC.index("End Stage Renal Failure"), V.STATIC.index("Congestive Heart Failure")]] = 0.0
-    return data._part(cache, test_rows(cache, limit), x, mask, torch.tensor(protocol.mean),
-                      (static - static_mean) / static_sd)
+    return data._part(cache, rows, x, mask, torch.tensor(protocol.mean), (static - static_mean) / static_sd)

@@ -13,6 +13,16 @@ V continuous variables, K binary variables and S static columns:
     binary             [N, T, K]
     time_hours         [N, T]
     static             [N, S]     standardised with training statistics
+
+A training part may also hold, per stay, which variables and binary
+outcomes its source records at all:
+
+    observable         [N, V]     1 where the source records the variable hour by hour
+    outcomes_known     [N, K]     1 where the source records the outcome
+
+The training loss leaves the other observation, timing and outcome terms
+out (`pulse.train.pulse_loss`); a part without them counts every term. Only
+the eICU stays of co-training carry them (`pulse.eicu.cotrain`).
 """
 from __future__ import annotations
 
@@ -55,10 +65,14 @@ class Protocol:
 
 @dataclass(frozen=True)
 class Prepared:
+    """The three parts and the protocol; `sources` holds the digests of further caches whose stays joined
+    the training part, which a fit's identity and checkpoint record."""
+
     train: Part
     val: Part
     test: Part
     protocol: Protocol
+    sources: tuple[str, ...] = ()
 
 
 def case_path(directory: Path, case: int) -> Path:
@@ -267,6 +281,22 @@ def _part(cache: dict, ids: np.ndarray, x: torch.Tensor, mask: torch.Tensor, mea
     return {"continuous": filled, "continuous_target": torch.where(mask[ids], x[ids], mean),
             "continuous_mask": mask[ids].float(), "binary": cache["binary"][ids].float(),
             "time_hours": cache["time_hours"][ids].float(), "static": static[ids]}
+
+
+def concatenate(parts: list[Part]) -> Part:
+    """Parts joined along the patient axis; a part without `observable` or `outcomes_known` records everything."""
+    flagged = [key for key in ("observable", "outcomes_known") if any(key in part for part in parts)]
+    widths = {"observable": len(V.CONTINUOUS), "outcomes_known": len(V.BINARY)}
+
+    def full(part: Part, key: str) -> torch.Tensor:
+        return part[key] if key in part else torch.ones(len(part["continuous"]), widths[key])
+
+    keys = [key for key in parts[0] if key not in flagged]
+    if any(sorted(k for k in part if k not in flagged) != sorted(keys) for part in parts):
+        raise ValueError("the parts hold different tensors")
+    joined = {key: torch.cat([part[key] for part in parts]) for key in keys}
+    joined.update({key: torch.cat([full(part, key) for part in parts]) for key in flagged})
+    return joined
 
 
 def prepare(cache: dict, protocol: Protocol | None = None) -> Prepared:

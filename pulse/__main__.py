@@ -58,6 +58,9 @@ def _parser() -> argparse.ArgumentParser:
                             "<row>.pt; a row that reuses the weights of another row trains that row")
     train.add_argument("--protocol", type=Path, default=None,
                        help="train with the statistics of this protocol (for example the shipped one)")
+    train.add_argument("--cotrain-eicu", type=Path, default=None,
+                       help="add the training stays of this eICU cache (python -m pulse build-eicu) to the "
+                            "training part; validation stays MIMIC's (pulse.eicu.cotrain)")
     train.add_argument("--device", default="cpu", help="cpu, cuda or mps")
     train.add_argument("--epochs", type=int, default=None, help="default: the published 50")
     train.add_argument("--batch", type=int, default=None, help="default: the published 32")
@@ -195,6 +198,11 @@ def train(args) -> None:
         raise SystemExit(f"{args.out / 'policy.pt'} is missing: {readers} read the policy; train it first, "
                          "or add policy to --phases")
     prepared = _prepare(args.cache, args.protocol)
+    if args.cotrain_eicu is not None:
+        from pulse import eicu
+
+        prepared = eicu.cotrain(prepared, eicu.load_cache(args.cotrain_eicu))
+        print(f"co-training: {len(prepared.train['continuous'])} training stays, MIMIC and eICU", flush=True)
     policy = None
     for name, phase, architecture in fits:
         if phase not in ("policy", T.BASELINE) and policy is None:

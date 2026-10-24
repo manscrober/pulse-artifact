@@ -7,6 +7,8 @@ import torch
 from pulse import data as D
 from pulse import model as M
 from pulse import train as T
+from pulse import variables as V
+from pulse.feedback import ARMS
 from pulse.rows import ROWS
 from synthetic import part, perturb, protocol
 
@@ -83,6 +85,74 @@ def test_fit_of_a_row_is_saved_under_its_name_with_its_variant(tmp_path):
     saved = torch.load(tmp_path / "flow.pt", weights_only=True)
     assert saved["architecture"] == dataclasses.asdict(ROWS["flow"].architecture)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["flow.pt", "protocol.json"]
+
+
+def _sample_model_and_batch():
+    data = prepared()
+    model = T.build("sample", data, frozen_policy())
+    perturb(model, seed=4)
+    model.eval()
+    return model, {k: v[:4] for k, v in data.train.items()}
+
+
+def test_masks_of_a_source_that_records_everything_leave_the_loss_unchanged():
+    model, batch = _sample_model_and_batch()
+    flagged = {**batch, "observable": torch.ones(4, len(V.CONTINUOUS)), "outcomes_known": torch.ones(4, len(V.BINARY))}
+    with torch.no_grad():
+        assert torch.allclose(T.pulse_loss(model, flagged, ARMS["sample"]), T.pulse_loss(model, batch, ARMS["sample"]),
+                              rtol=1e-6, atol=0)
+
+
+def test_a_source_leaves_the_terms_of_what_it_never_records_out_of_the_loss():
+    """Changing the observation, timing and outcome heads of what a source never records leaves its loss alone."""
+    model, batch = _sample_model_and_batch()
+    variable, outcome = "Lactate", "Cumulative Edema"
+    observable = torch.ones(4, len(V.CONTINUOUS))
+    observable[:, V.CONTINUOUS.index(variable)] = 0.0
+    known = torch.ones(4, len(V.BINARY))
+    known[:, V.BINARY.index(outcome)] = 0.0
+    flagged = {**batch, "observable": observable, "outcomes_known": known}
+
+    def losses():
+        with torch.no_grad():
+            return [T.pulse_loss(model, b, ARMS["sample"]).item() for b in (flagged, batch)]
+
+    before = losses()
+    core = model.pulse
+    encoder = next(e for e in core.encoders if variable in e.outputs)
+    i = encoder.outputs.index(variable)
+    binary = core.encoders[core.binary_group]
+    with torch.no_grad():
+        for head in (encoder.obs_heads[i], encoder.delta_t_heads[i], binary.heads[binary.outputs.index(outcome)]):
+            head.weight.add_(0.5)
+            head.bias.add_(0.5)
+    after = losses()
+    assert after[0] == before[0]
+    assert after[1] != before[1]
+
+
+def test_initial_outcome_rates_count_only_the_stays_that_record_the_outcome():
+    data = prepared()
+    core = M.pulse_model(protocol())
+    j = V.BINARY.index("Cumulative Edema")
+    binary = data.train["binary"].clone()
+    binary[:3, :, j] = 0.0
+    known = torch.ones(len(binary), len(V.BINARY))
+    known[:3, j] = 0.0
+    logits = core.binary_initial_logits(binary, known)
+    assert logits["Cumulative Edema"] == core.binary_initial_logits(data.train["binary"][3:])["Cumulative Edema"]
+    assert logits["Dialysis Indicator"] == core.binary_initial_logits(binary)["Dialysis Indicator"]
+
+
+def test_a_cotrained_fit_records_its_sources(tmp_path):
+    data = prepared()
+    joined = D.Prepared(train=D.concatenate([data.train, part(seed=10, n=3)]), val=data.val, test=data.test,
+                        protocol=data.protocol, sources=("e" * 64,))
+    settings = T.Settings(epochs=1, batch=BATCH, micro=MICRO, patience=1, min_epochs=1)
+    T.fit("sample", joined, frozen_policy(), tmp_path, "cpu", settings, architecture=ROWS["anchor"].architecture,
+          name="anchor")
+    saved = torch.load(tmp_path / "anchor.pt", weights_only=True)
+    assert saved["sources"] == ["e" * 64] and saved["cache_sha256"] == protocol().cache_sha256
 
 
 def test_waiting_time_targets():

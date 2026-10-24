@@ -56,7 +56,9 @@ command lists its options and defaults.
 | `score` | the cache, the protocol and the rollouts | one JSON file of scored rows |
 
 With `--eicu cache/eicu.pt`, `rollout` and `score` take the first 1,000
-test stays of the transfer cache in place of the MIMIC test patients.
+test stays of the transfer cache in place of the MIMIC test patients. With
+`--cotrain-eicu cache/eicu.pt`, `train` adds the eICU training stays to the
+MIMIC training patients (`pulse.eicu.cotrain`); validation stays MIMIC's.
 
 A case file holds the paths of one test patient without loss: the recorded
 hours, which every path shares, are stored once, the binary events as bits,
@@ -206,7 +208,16 @@ python -m pulse train --cache cache/sepsis.pt --out runs/checkpoints            
 python -m pulse train --out runs/checkpoints --phases quantile_only --device cuda     # one phase; reads policy.pt
 python -m pulse train --out runs/checkpoints --phases gtransformer --device cuda      # the baseline
 python -m pulse train --out runs/checkpoints --rows point gaussian flow               # rows; reads policy.pt
+python -m pulse train --out runs/cotrained --rows anchor --cotrain-eicu cache/eicu.pt  # with eICU stays; reads policy.pt
 ```
+
+eICU records seven vital signs hour by hour and none of the other MIMIC
+variables. Its training stays therefore count in the loss only for what
+they record: the observation, timing and outcome terms of every other
+variable and outcome are left out, so that the observation head does not
+learn from them that laboratory values are never measured
+(`pulse.train.pulse_loss`). A co-trained checkpoint lists the eICU cache
+digest under `sources`.
 
 A checkpoint is a dictionary saved with `torch.save` holding the model
 weights (`state`), the validation history of the training run (`history`,
@@ -640,7 +651,8 @@ tests fail on a release.
 - `pulse/cohort.py` reads the cohort from a DuckDB database and writes the
   cache.
 - `pulse/eicu.py` selects the eICU stays of the transfer test from the eICU
-  CSV files and maps its test stays onto the MIMIC variables.
+  CSV files, maps its test stays onto the MIMIC variables and adds its
+  training stays to the MIMIC training patients for co-training.
 - `pulse/data.py` holds the cache format, the split, preparation, the
   protocol and the files of sampled paths.
 - `pulse/cnf.py` holds the conditional normalising flow of one continuous

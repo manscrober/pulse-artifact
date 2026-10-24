@@ -13,6 +13,7 @@ import torch
 
 from pulse import data, eicu
 from pulse import variables as V
+from synthetic import part as synthetic_part
 from synthetic import protocol
 
 HOURLY = range(24)
@@ -126,6 +127,39 @@ def test_split_of_the_published_cohort_and_its_first_test_stays():
     assert eicu._sizes(21659) == (15161, 2166) and len(rows) == 1000
     assert np.array_equal(rows, order[15161 + 2166:][:1000])
     assert len(eicu.test_rows(stays, limit=10**6)) == 4332
+
+
+def _mapped_cache(n: int = 30):
+    g = torch.Generator().manual_seed(3)
+    x = torch.full((n, 24, len(V.CONTINUOUS)), float("nan"))
+    x[..., :6] = 50 + 20 * torch.rand(n, 24, 6, generator=g)
+    x[torch.rand(n, 24, len(V.CONTINUOUS), generator=g) < 0.3] = float("nan")
+    static = torch.tensor([[60.0, float("nan"), float("nan"), 1.0, 1.0, 1.0]]).repeat(n, 1)
+    return {"continuous": x, "continuous_mask": torch.isfinite(x).float(),
+            "binary": (torch.rand(n, 24, len(V.BINARY), generator=g) < 0.1).float(),
+            "time_hours": torch.arange(24).float().expand(n, -1), "static": static, "stay_ids": torch.arange(n),
+            "sha256": "e" * 64}
+
+
+def test_training_part_marks_what_eicu_records_and_cotraining_appends_it():
+    cache = _mapped_cache()
+    p = protocol()
+    rows = eicu.training_rows(cache)
+    assert np.array_equal(rows, np.random.default_rng(42).permutation(30)[:eicu._sizes(30)[0]])
+    part = eicu.training_part(cache, p)
+    assert torch.equal(part["continuous_mask"], torch.isfinite(cache["continuous"][rows]).float())
+    vitals = sorted(V.CONTINUOUS.index(name) for name in eicu.PERIODIC)
+    assert part["observable"].sum(0).nonzero().flatten().tolist() == vitals
+    assert part["observable"][:, vitals].eq(1).all()
+    assert part["outcomes_known"].eq(0).nonzero()[:, 1].unique().tolist() == [V.BINARY.index("Cumulative Edema")]
+    mimic = data.Prepared(train=synthetic_part(seed=7, n=5), val=synthetic_part(seed=8, n=2),
+                          test=synthetic_part(seed=9, n=1), protocol=p)
+    joined = eicu.cotrain(mimic, cache)
+    assert joined.sources == ("e" * 64,) and joined.val is mimic.val and joined.test is mimic.test
+    assert torch.equal(joined.train["continuous"][:5], mimic.train["continuous"])
+    assert torch.equal(joined.train["continuous"][5:], part["continuous"])
+    assert joined.train["observable"][:5].eq(1).all() and joined.train["outcomes_known"][:5].eq(1).all()
+    assert torch.equal(joined.train["observable"][5:], part["observable"])
 
 
 def test_test_part_fills_and_scales_with_the_mimic_statistics():

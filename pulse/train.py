@@ -21,6 +21,11 @@ The PULSE loss is the sum, in this order, of
   log(1 + predicted hours) and log(1 + hours until the variable is next
   recorded), those hours set to 48 when the variable is not recorded again.
 
+Stays whose source never records some variables or outcomes (`observable`
+and `outcomes_known` of `pulse.data`) leave those observation, timing and
+outcome terms out; the observation cross-entropy is then the mean over the
+terms that count.
+
 The policy loss is the squared error of the next bolus volume in training
 standard deviations, averaged over recorded entries, plus the cross-entropy
 of the next vasopressor indicator.
@@ -89,12 +94,18 @@ def policy_loss(policy: M.Policy, batch: Part) -> torch.Tensor:
                                                      batch["binary"][:, 1:, vaso])
 
 
-def _binary_loss(logits: torch.Tensor, target: torch.Tensor, absorbing: torch.Tensor) -> torch.Tensor:
-    """Two-class cross-entropy over a zero logit and `logits`, with absorbing outcomes held after onset."""
+def _binary_loss(logits: torch.Tensor, target: torch.Tensor, absorbing: torch.Tensor,
+                 known: torch.Tensor | None = None) -> torch.Tensor:
+    """Two-class cross-entropy over a zero logit and `logits`, with absorbing outcomes held after onset.
+
+    `known` [B, K], when given, leaves out the outcomes a stay's source does not record.
+    """
     pair = torch.stack([torch.zeros_like(logits), logits], -1)
     ever = target.cummax(dim=1).values
     before = torch.cat([torch.zeros_like(ever[:, :1, :]), ever[:, :-1, :]], 1)
     counted = torch.where(absorbing.view(1, 1, -1), before == 0, torch.ones_like(before))
+    if known is not None:
+        counted = counted * known.unsqueeze(1).to(counted.dtype)
     target = torch.where(absorbing.view(1, 1, -1), ever, target)
     loss = F.cross_entropy(pair.reshape(-1, 2), target.reshape(-1).long(), reduction="none").view_as(target)
     return (loss * counted).sum() / (counted.sum() + 1e-8)
@@ -140,21 +151,29 @@ def pulse_loss(model: FeedbackPULSE | G.GTransformer, batch: Part, arm: Arm) -> 
         squared = recorded * ordinal.to(recorded.dtype)
         loss = loss + ((target - out["mu"][:, :-1]) ** 2 * squared).sum() / (squared.sum() + 1e-8)
 
+    observable, known = batch.get("observable"), batch.get("outcomes_known")
     absorbing = torch.tensor([core.binary_names[i] in V.ABSORBING for i in core.binary_output_indices],
                              device=target.device)
     loss = loss + _binary_loss(out["bin_logits"][:, :-1], batch["binary"][:, 1:, core.binary_output_indices],
-                               absorbing)
+                               absorbing, None if known is None else known[:, core.binary_output_indices])
 
     # Elementwise then mean: the fused mean reduction gives the same value but other gradient bits.
     observed = out["obs_logits"][:, :-1]
-    loss = loss + F.binary_cross_entropy_with_logits(observed, (recorded > 0).to(observed.dtype),
-                                                     reduction="none").mean()
+    cross_entropy = F.binary_cross_entropy_with_logits(observed, (recorded > 0).to(observed.dtype),
+                                                       reduction="none")
+    if observable is None:
+        loss = loss + cross_entropy.mean()
+    else:
+        counts = observable[:, idx].unsqueeze(1).expand_as(cross_entropy).to(cross_entropy.dtype)
+        loss = loss + (cross_entropy * counts).sum() / counts.sum().clamp_min(1.0)
 
     if out["delta_t_hours"] is None:
         return loss
     predicted = out["delta_t_hours"][:, :-1]
     waits = _hours_to_next_record(batch["continuous_mask"][:, :, idx], batch["time_hours"])
     valid = (torch.isfinite(predicted) & torch.isfinite(waits)).to(predicted.dtype)
+    if observable is not None:
+        valid = valid * observable[:, idx].unsqueeze(1).to(valid.dtype)
     wait = F.smooth_l1_loss(torch.log1p(predicted.clamp_min(0.0)), torch.log1p(waits.clamp_min(0.0)),
                             reduction="none")
     return loss + WAIT_WEIGHT * ((wait * valid).sum() / valid.sum().clamp(min=1.0))
@@ -220,7 +239,8 @@ def build(phase: str, prepared: Prepared, policy: M.Policy | None,
         return G.build_gtransformer(prepared.protocol, prepared.train["binary"])
     if policy is None:
         raise ValueError(f"phase {phase} needs the trained policy")
-    model = build_pulse(prepared.protocol, prepared.train["binary"], architecture)
+    model = build_pulse(prepared.protocol, prepared.train["binary"], architecture,
+                        prepared.train.get("outcomes_known"))
     model.attach_policy(policy)
     return model
 
@@ -368,6 +388,8 @@ def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, dev
     continuation = out / f"{name}.continue.pt"
     identity = {"phase": phase, "settings": asdict(settings), "architecture": asdict(architecture),
                 "cache_sha256": prepared.protocol.cache_sha256, "device": torch.device(device).type}
+    if prepared.sources:
+        identity["sources"] = list(prepared.sources)
     progress = (_continue(continuation, identity, model, optimizer, scheduler, device) if continuation.exists()
                 else _Progress())
 
@@ -408,7 +430,7 @@ def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, dev
     out.mkdir(parents=True, exist_ok=True)
     prepared.protocol.save(out / "protocol.json")
     M.save_checkpoint(out / f"{name}.pt", model, progress.history, prepared.protocol.cache_sha256,
-                      architecture if isinstance(model, FeedbackPULSE) else None)
+                      architecture if isinstance(model, FeedbackPULSE) else None, prepared.sources)
     continuation.unlink(missing_ok=True)
     return {"model": model, "history": progress.history, "validation_loss": progress.best,
             "stopped_early": len(progress.history) < settings.epochs}

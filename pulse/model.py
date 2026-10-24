@@ -228,17 +228,19 @@ class GroupedModel(nn.Module):
         self.cont_means.copy_(torch.as_tensor(mean, dtype=torch.float32))
         self.cont_stds.copy_(torch.as_tensor(sd, dtype=torch.float32))
 
-    def binary_initial_logits(self, binary: torch.Tensor) -> dict[str, float]:
+    def binary_initial_logits(self, binary: torch.Tensor, known: torch.Tensor | None = None) -> dict[str, float]:
         """Training-set log-odds of each binary output turning on in the next hour.
 
         `binary` is [N, T, K]. For an absorbing variable only hours before it
-        first turned on count. Rates are kept inside [1e-4, 1 - 1e-4].
+        first turned on count. With `known` [N, K] only the stays whose source
+        records the outcome count. Rates are kept inside [1e-4, 1 - 1e-4].
         """
         logits = {}
         for name, i in zip(self.binary_outputs, self.binary_output_indices):
-            target = binary[:, 1:, i].float()
+            stays = slice(None) if known is None else known[:, i] > 0.5
+            target = binary[stays, 1:, i].float()
             if name in V.ABSORBING:
-                before = binary[:, :-1, i].float().cummax(dim=1).values < 0.5
+                before = binary[stays, :-1, i].float().cummax(dim=1).values < 0.5
                 rate = target[before].mean().item() if before.any() else 0.0
             else:
                 rate = target.mean().item() if target.numel() else 0.0
@@ -475,15 +477,17 @@ def reference_pulse_state(state: dict[str, torch.Tensor]) -> dict[str, torch.Ten
 
 
 def save_checkpoint(path, model: nn.Module, history: list[dict], cache_sha256: str,
-                    architecture: Architecture | None = None) -> None:
+                    architecture: Architecture | None = None, sources: tuple[str, ...] = ()) -> None:
     """Weights, validation history, the cache digest of the protocol the model was trained with and,
-    when given, the PULSE variant."""
+    when given, the PULSE variant and the digests of further caches whose stays joined the training part."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"state": {k: v.detach().cpu().clone() for k, v in model.state_dict().items()},
                "history": history, "cache_sha256": cache_sha256}
     if architecture is not None:
         payload["architecture"] = asdict(architecture)
+    if sources:
+        payload["sources"] = list(sources)
     pending = path.with_suffix(".pending")
     torch.save(payload, pending)
     pending.replace(path)
