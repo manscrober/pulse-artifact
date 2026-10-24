@@ -74,6 +74,8 @@ APERIODIC = {"Systolic Blood Pressure": "noninvasivesystolic", "Diastolic Blood 
              "Mean Blood Pressure": "noninvasivemean"}
 # Binary outcomes the cohort never records.
 UNRECORDED_OUTCOMES = ("Cumulative Edema",)
+# Variables the cohort writes into every hour from one value per stay; co-training counts the first hour only.
+ONCE_PER_STAY = ("Weight",)
 
 
 def _connect():
@@ -283,10 +285,20 @@ def training_part(cache: dict, protocol: data.Protocol) -> data.Part:
     is one except for `UNRECORDED_OUTCOMES`, so the training loss leaves the
     observation and timing terms of every other variable, and the outcome
     terms of those outcomes, out (`pulse.train.pulse_loss`). The weight is
-    a value in every hour but no hourly record: the cohort copies the
-    admission weight into each hour.
+    a value in every hour but no hourly record: the cohort copies one weight
+    of the stay into each hour. Each variable of `ONCE_PER_STAY` therefore
+    counts as recorded in its first recorded hour only, so the likelihood
+    sees one weight per stay; the inputs still carry it forward. MIMIC
+    records the weight in 2% of training rows.
     """
     part = _mapped_part(cache, protocol, training_rows(cache))
+    mask, target = part["continuous_mask"].clone(), part["continuous_target"].clone()
+    for name in ONCE_PER_STAY:
+        v = V.CONTINUOUS.index(name)
+        first = (mask[:, :, v] > 0) & (mask[:, :, v].cumsum(1) == 1)
+        mask[:, :, v] = first.float()
+        target[:, :, v] = torch.where(first, target[:, :, v], protocol.mean[v])
+    part = {**part, "continuous_mask": mask, "continuous_target": target}
     n = len(part["continuous"])
     observable = torch.zeros(n, len(V.CONTINUOUS))
     observable[:, [V.CONTINUOUS.index(name) for name in PERIODIC]] = 1.0

@@ -134,6 +134,7 @@ def _mapped_cache(n: int = 30):
     x = torch.full((n, 24, len(V.CONTINUOUS)), float("nan"))
     x[..., :6] = 50 + 20 * torch.rand(n, 24, 6, generator=g)
     x[torch.rand(n, 24, len(V.CONTINUOUS), generator=g) < 0.3] = float("nan")
+    x[..., V.CONTINUOUS.index("Weight")] = (70 + 20 * torch.rand(n, 1, generator=g)).expand(n, 24)
     static = torch.tensor([[60.0, float("nan"), float("nan"), 1.0, 1.0, 1.0]]).repeat(n, 1)
     return {"continuous": x, "continuous_mask": torch.isfinite(x).float(),
             "binary": (torch.rand(n, 24, len(V.BINARY), generator=g) < 0.1).float(),
@@ -147,7 +148,16 @@ def test_training_part_marks_what_eicu_records_and_cotraining_appends_it():
     rows = eicu.training_rows(cache)
     assert np.array_equal(rows, np.random.default_rng(42).permutation(30)[:eicu._sizes(30)[0]])
     part = eicu.training_part(cache, p)
-    assert torch.equal(part["continuous_mask"], torch.isfinite(cache["continuous"][rows]).float())
+    w = V.CONTINUOUS.index("Weight")
+    others = [v for v in range(len(V.CONTINUOUS)) if v != w]
+    recorded = torch.isfinite(cache["continuous"][rows])
+    assert torch.equal(part["continuous_mask"][..., others], recorded[..., others].float())
+    # The weight copied into every hour counts once per stay, in its first hour; the inputs carry it forward.
+    assert recorded[..., w].all() and part["continuous_mask"][..., w].sum(1).eq(1).all()
+    assert part["continuous_mask"][:, 0, w].eq(1).all()
+    assert part["continuous_target"][:, 1:, w].eq(p.mean[w]).all()
+    assert torch.equal(part["continuous"][..., w], cache["continuous"][rows, :, w])
+    assert eicu.test_part(cache, p)["continuous_mask"][..., w].eq(1).all()
     vitals = sorted(V.CONTINUOUS.index(name) for name in eicu.PERIODIC)
     assert part["observable"].sum(0).nonzero().flatten().tolist() == vitals
     assert part["observable"][:, vitals].eq(1).all()
