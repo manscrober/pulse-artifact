@@ -1,0 +1,105 @@
+{
+ "digests": {
+  "bounds_high": {
+   "dtype": "float32",
+   "sha256": "ee65bdb9bbcda34eb5b2ccad795d78a9f03ba3ecfa9e597bc4d4be363ecea5a5",
+   "shape": [
+    37
+   ]
+  },
+  "bounds_low": {
+   "dtype": "float32",
+   "sha256": "694c9138a5cccbe6623653e97ca407b1b728f0a552951948aa57f69c194fdbb1",
+   "shape": [
+    37
+   ]
+  },
+  "death": {
+   "dtype": "int64",
+   "sha256": "f088ef0583583dda7abb56c06bb7c229cf8ebf8ccd1e6b9bdaecf97f9e056a63",
+   "shape": [
+    8
+   ]
+  },
+  "derived": {
+   "dtype": "float32",
+   "sha256": "3e195286bf6a2ce457a399799c5b97aef623967c2ff56d3254b0df023ed5703a",
+   "shape": [
+    8,
+    24,
+    37
+   ]
+  },
+  "event": {
+   "dtype": "bool",
+   "sha256": "ce0d18d04612498116c8229fc6ae590ebd6a8277c72f82786e874c7c5089ba4c",
+   "shape": [
+    8,
+    24
+   ]
+  },
+  "fill_after_events": {
+   "dtype": "float32",
+   "sha256": "8c23a4ea6e78d3aaf74f64be65d0dcceba8d2bc0fa91830ec0aabdb8fb808beb",
+   "shape": [
+    8,
+    24,
+    37
+   ]
+  },
+  "fill_zero_invalid": {
+   "dtype": "float32",
+   "sha256": "611dcdba9fb8010d96fe9755afe3062f0b1ece46a3df2641338c734e04e24a78",
+   "shape": [
+    8,
+    37
+   ]
+  },
+  "fill_zero_invalid_all_hours": {
+   "dtype": "float32",
+   "sha256": "514f5f5b8dbeaa801a493ecaf6e96659b08a28fe0439cee253c9879b2be6e5ca",
+   "shape": [
+    8,
+    24,
+    37
+   ]
+  },
+  "fill_zero_invalid_no_event": {
+   "dtype": "float32",
+   "sha256": "9c139a6dddb08ff2dbe61712d3dde1f3e30a3c151ece20e02336717d0eb75e64",
+   "shape": [
+    8,
+    37
+   ]
+  },
+  "forward_fill": {
+   "dtype": "float32",
+   "sha256": "c5554cac1d80d21b09b4674f3443f73861968f769bfc5ee76040765cecd1529c",
+   "shape": [
+    8,
+    24,
+    37
+   ]
+  },
+  "release": {
+   "dtype": "int64",
+   "sha256": "f9a475db1a18b291fd1e098528450b8cab8b5e7280af602d7b851d133572f9d2",
+   "shape": [
+    8
+   ]
+  },
+  "zero_invalid_mask": {
+   "dtype": "float32",
+   "sha256": "ca0b5381a554db7e41cf3a3cefad142bee53c99332c7d7d248dac8b087e8e5b5",
+   "shape": [
+    8,
+    24,
+    37
+   ]
+  }
+ },
+ "meta": {
+  "reference": "reference implementation",
+  "torch": "2.13.0"
+ }
+}

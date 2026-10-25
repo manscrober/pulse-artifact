@@ -1,0 +1,220 @@
+{
+ "digests": {
+  "groups": {
+   "dtype": "uint8",
+   "sha256": "f4867f0c08fe6a0c2458ba12da27c3a6a55eb57873519782d3d9687191fb98c4",
+   "shape": [
+    893
+   ]
+  },
+  "mean": {
+   "dtype": "float32",
+   "sha256": "c230963294dfe9f3fea17b0634e5b439316c97f23322fefc00d65e8abca2a34e",
+   "shape": [
+    37
+   ]
+  },
+  "sd": {
+   "dtype": "float32",
+   "sha256": "54443a86c52b3d5b8d13e651b9dc612096605fd49f318251ed13724cdf204953",
+   "shape": [
+    37
+   ]
+  },
+  "static_mean": {
+   "dtype": "float32",
+   "sha256": "b436ce6f34bf5378ae217a1f3498e6d666e1f0e5e802101f638b0f761db4eb38",
+   "shape": [
+    6
+   ]
+  },
+  "static_sd": {
+   "dtype": "float32",
+   "sha256": "736ad1a2a465a84dcf9bf27c311fe78dd3fe80f4a9138268248728ae2b74ef54",
+   "shape": [
+    6
+   ]
+  },
+  "test_binary": {
+   "dtype": "float32",
+   "sha256": "0683f3c22877a05ab09c6a0f854d5c3b4e337b549a62bf5a97dae5a848f448fe",
+   "shape": [
+    894,
+    24,
+    8
+   ]
+  },
+  "test_continuous": {
+   "dtype": "float32",
+   "sha256": "52604207de8fca5ffa79d2d2f94c0f031034ea207e47d4617acd1b79bf0db44d",
+   "shape": [
+    894,
+    24,
+    37
+   ]
+  },
+  "test_continuous_mask": {
+   "dtype": "float32",
+   "sha256": "0698b88e697ba5360e8560219386a03de05b12dc8a73dfdce4ebb44242b49379",
+   "shape": [
+    894,
+    24,
+    37
+   ]
+  },
+  "test_continuous_target": {
+   "dtype": "float32",
+   "sha256": "78f652a55d5eee2e071a6554bcfec545653b6e7e9c6421185c6786d1559ef2ee",
+   "shape": [
+    894,
+    24,
+    37
+   ]
+  },
+  "test_static": {
+   "dtype": "float32",
+   "sha256": "2dbd56591fd60a45bb47f26e3b714a4934fe190add5e7025a76146c5977b8a95",
+   "shape": [
+    894,
+    6
+   ]
+  },
+  "test_subjects": {
+   "dtype": "int64",
+   "sha256": "e60b6b0e1f8130bed140470bcfba285e39a93aa24df997646b575ca784ba8d1f",
+   "shape": [
+    894
+   ]
+  },
+  "test_time_hours": {
+   "dtype": "float32",
+   "sha256": "cfcfb6273c2707e5cfc1c6919867eb140c41200a3fee778430076583a1c14185",
+   "shape": [
+    894,
+    24
+   ]
+  },
+  "train_binary": {
+   "dtype": "float32",
+   "sha256": "1ad157172a104d4cf17f68e4f478779f2bf90d355c90ee04abb245dbe39b080d",
+   "shape": [
+    7147,
+    24,
+    8
+   ]
+  },
+  "train_continuous": {
+   "dtype": "float32",
+   "sha256": "35697c06ce9572a7fbbe53749855fa64e9aabf1161aa99fc5eb45fd752b8de98",
+   "shape": [
+    7147,
+    24,
+    37
+   ]
+  },
+  "train_continuous_mask": {
+   "dtype": "float32",
+   "sha256": "6e17f23feb333a9d5a15cf8d7455b63000244f69bebb5c6dd07dec66b57b104d",
+   "shape": [
+    7147,
+    24,
+    37
+   ]
+  },
+  "train_continuous_target": {
+   "dtype": "float32",
+   "sha256": "b29c4e732387341608e88dceea064605d41c4938f1b07908b3be088713be8ff6",
+   "shape": [
+    7147,
+    24,
+    37
+   ]
+  },
+  "train_static": {
+   "dtype": "float32",
+   "sha256": "0a32283fec12c29317bab9a14022927229d47d9dc610132e0124c15c1114b5a7",
+   "shape": [
+    7147,
+    6
+   ]
+  },
+  "train_subjects": {
+   "dtype": "int64",
+   "sha256": "a74ed98ac888a788b32feb6ec9f7fcee2d1f283d9dbedcf707f51e1dfd560c6a",
+   "shape": [
+    7147
+   ]
+  },
+  "train_time_hours": {
+   "dtype": "float32",
+   "sha256": "b72c609d6487e38c16ab5e36b36fa3d1e9c9c7fbc3f0f5bad1548dd742d5012f",
+   "shape": [
+    7147,
+    24
+   ]
+  },
+  "val_binary": {
+   "dtype": "float32",
+   "sha256": "7ce3f5175cfba7e9e3b11b038b7e165c951851eca60bd9065c034fbb33b9f306",
+   "shape": [
+    893,
+    24,
+    8
+   ]
+  },
+  "val_continuous": {
+   "dtype": "float32",
+   "sha256": "b3cf7e6183228d7146380a68b05f5424dcfb8d3acc4b019f3108e574a7a55601",
+   "shape": [
+    893,
+    24,
+    37
+   ]
+  },
+  "val_continuous_mask": {
+   "dtype": "float32",
+   "sha256": "1424c14a07440782220658ce6e7b96cf4c65037e7c82a5b70f57676e69660337",
+   "shape": [
+    893,
+    24,
+    37
+   ]
+  },
+  "val_continuous_target": {
+   "dtype": "float32",
+   "sha256": "dbb0b156710d3bab6aabe928807f0f3e5633ae065f887e1385fe0e11f5c9bd28",
+   "shape": [
+    893,
+    24,
+    37
+   ]
+  },
+  "val_static": {
+   "dtype": "float32",
+   "sha256": "567db016995f181eddfa115d4197cbe6c303015c1aeed7c3da1d9ac7831b8a8d",
+   "shape": [
+    893,
+    6
+   ]
+  },
+  "val_subjects": {
+   "dtype": "int64",
+   "sha256": "23ec6c36b76b4e24af73b6a355d23d743c7bf00c4e29afcd7f6180760cb34f72",
+   "shape": [
+    893
+   ]
+  },
+  "val_time_hours": {
+   "dtype": "float32",
+   "sha256": "36f351f0141bb37f586968d40999265195c4a69f9622d79bef908c7d0e5aaecc",
+   "shape": [
+    893,
+    24
+   ]
+  }
+ },
+ "meta": {
+  "reference": "reference implementation",
+  "torch": "2.13.0"
+ }
+}

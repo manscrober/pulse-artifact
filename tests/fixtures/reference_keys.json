@@ -1,0 +1,3647 @@
+{
+ "pulse": {
+  "pulse.model.cont_means": [
+   37
+  ],
+  "pulse.model.cont_stds": [
+   37
+  ],
+  "pulse.model.encoders.0.input_proj.weight": [
+   64,
+   134
+  ],
+  "pulse.model.encoders.0.input_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.time_encoder.angular_frequencies": [
+   8
+  ],
+  "pulse.model.encoders.0.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "pulse.model.encoders.0.time_encoder.proj.0.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.0.time_encoder.proj.2.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.time_encoder.norm.weight": [
+   64
+  ],
+  "pulse.model.encoders.0.time_encoder.norm.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.0.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.0.heads.0.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.0.heads.0.bias": [
+   26
+  ],
+  "pulse.model.encoders.0.heads.1.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.0.heads.1.bias": [
+   26
+  ],
+  "pulse.model.encoders.0.heads.2.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.0.heads.2.bias": [
+   26
+  ],
+  "pulse.model.encoders.0.heads.3.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.0.heads.3.bias": [
+   26
+  ],
+  "pulse.model.encoders.0.heads.4.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.0.heads.4.bias": [
+   26
+  ],
+  "pulse.model.encoders.0.heads.5.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.0.heads.5.bias": [
+   26
+  ],
+  "pulse.model.encoders.0.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.obs_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.obs_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.obs_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.obs_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.obs_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.obs_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.delta_t_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.delta_t_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.delta_t_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.delta_t_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.delta_t_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.delta_t_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.0.residual_gate_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.input_proj.weight": [
+   64,
+   134
+  ],
+  "pulse.model.encoders.1.input_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.time_encoder.angular_frequencies": [
+   8
+  ],
+  "pulse.model.encoders.1.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "pulse.model.encoders.1.time_encoder.proj.0.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.1.time_encoder.proj.2.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.time_encoder.norm.weight": [
+   64
+  ],
+  "pulse.model.encoders.1.time_encoder.norm.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.1.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.1.heads.0.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.1.heads.0.bias": [
+   26
+  ],
+  "pulse.model.encoders.1.heads.1.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.1.heads.1.bias": [
+   26
+  ],
+  "pulse.model.encoders.1.heads.2.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.1.heads.2.bias": [
+   26
+  ],
+  "pulse.model.encoders.1.heads.3.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.1.heads.3.bias": [
+   26
+  ],
+  "pulse.model.encoders.1.heads.4.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.1.heads.4.bias": [
+   26
+  ],
+  "pulse.model.encoders.1.heads.5.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.1.heads.5.bias": [
+   26
+  ],
+  "pulse.model.encoders.1.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.obs_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.obs_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.obs_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.obs_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.obs_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.obs_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.delta_t_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.delta_t_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.delta_t_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.delta_t_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.delta_t_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.delta_t_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.1.residual_gate_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.input_proj.weight": [
+   64,
+   134
+  ],
+  "pulse.model.encoders.2.input_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.time_encoder.angular_frequencies": [
+   8
+  ],
+  "pulse.model.encoders.2.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "pulse.model.encoders.2.time_encoder.proj.0.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.2.time_encoder.proj.2.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.time_encoder.norm.weight": [
+   64
+  ],
+  "pulse.model.encoders.2.time_encoder.norm.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.2.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.2.heads.0.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.2.heads.0.bias": [
+   26
+  ],
+  "pulse.model.encoders.2.heads.1.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.2.heads.1.bias": [
+   26
+  ],
+  "pulse.model.encoders.2.heads.2.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.2.heads.2.bias": [
+   26
+  ],
+  "pulse.model.encoders.2.heads.3.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.2.heads.3.bias": [
+   26
+  ],
+  "pulse.model.encoders.2.heads.4.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.2.heads.4.bias": [
+   26
+  ],
+  "pulse.model.encoders.2.heads.5.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.2.heads.5.bias": [
+   26
+  ],
+  "pulse.model.encoders.2.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.obs_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.obs_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.obs_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.obs_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.obs_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.obs_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.delta_t_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.delta_t_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.delta_t_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.delta_t_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.delta_t_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.delta_t_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.2.residual_gate_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.input_proj.weight": [
+   64,
+   134
+  ],
+  "pulse.model.encoders.3.input_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.time_encoder.angular_frequencies": [
+   8
+  ],
+  "pulse.model.encoders.3.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "pulse.model.encoders.3.time_encoder.proj.0.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.3.time_encoder.proj.2.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.time_encoder.norm.weight": [
+   64
+  ],
+  "pulse.model.encoders.3.time_encoder.norm.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.3.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.3.heads.0.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.3.heads.0.bias": [
+   26
+  ],
+  "pulse.model.encoders.3.heads.1.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.3.heads.1.bias": [
+   26
+  ],
+  "pulse.model.encoders.3.heads.2.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.3.heads.2.bias": [
+   26
+  ],
+  "pulse.model.encoders.3.heads.3.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.3.heads.3.bias": [
+   26
+  ],
+  "pulse.model.encoders.3.heads.4.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.3.heads.4.bias": [
+   26
+  ],
+  "pulse.model.encoders.3.heads.5.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.3.heads.5.bias": [
+   26
+  ],
+  "pulse.model.encoders.3.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.obs_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.obs_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.obs_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.obs_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.obs_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.obs_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.delta_t_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.delta_t_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.delta_t_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.delta_t_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.delta_t_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.delta_t_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.3.residual_gate_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.input_proj.weight": [
+   64,
+   134
+  ],
+  "pulse.model.encoders.4.input_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.time_encoder.angular_frequencies": [
+   8
+  ],
+  "pulse.model.encoders.4.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "pulse.model.encoders.4.time_encoder.proj.0.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.4.time_encoder.proj.2.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.time_encoder.norm.weight": [
+   64
+  ],
+  "pulse.model.encoders.4.time_encoder.norm.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.4.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.4.heads.0.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.4.heads.0.bias": [
+   26
+  ],
+  "pulse.model.encoders.4.heads.1.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.4.heads.1.bias": [
+   26
+  ],
+  "pulse.model.encoders.4.heads.2.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.4.heads.2.bias": [
+   26
+  ],
+  "pulse.model.encoders.4.heads.3.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.4.heads.3.bias": [
+   26
+  ],
+  "pulse.model.encoders.4.heads.4.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.4.heads.4.bias": [
+   26
+  ],
+  "pulse.model.encoders.4.heads.5.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.4.heads.5.bias": [
+   26
+  ],
+  "pulse.model.encoders.4.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.obs_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.obs_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.obs_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.obs_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.obs_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.obs_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.delta_t_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.delta_t_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.delta_t_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.delta_t_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.delta_t_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.delta_t_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.4.residual_gate_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.input_proj.weight": [
+   64,
+   134
+  ],
+  "pulse.model.encoders.5.input_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.time_encoder.angular_frequencies": [
+   8
+  ],
+  "pulse.model.encoders.5.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "pulse.model.encoders.5.time_encoder.proj.0.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.5.time_encoder.proj.2.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.time_encoder.norm.weight": [
+   64
+  ],
+  "pulse.model.encoders.5.time_encoder.norm.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.5.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.5.heads.0.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.5.heads.0.bias": [
+   26
+  ],
+  "pulse.model.encoders.5.heads.1.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.5.heads.1.bias": [
+   26
+  ],
+  "pulse.model.encoders.5.heads.2.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.5.heads.2.bias": [
+   26
+  ],
+  "pulse.model.encoders.5.heads.3.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.5.heads.3.bias": [
+   26
+  ],
+  "pulse.model.encoders.5.heads.4.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.5.heads.4.bias": [
+   26
+  ],
+  "pulse.model.encoders.5.heads.5.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.5.heads.5.bias": [
+   26
+  ],
+  "pulse.model.encoders.5.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.obs_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.obs_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.obs_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.obs_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.obs_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.obs_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.delta_t_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.delta_t_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.delta_t_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.delta_t_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.delta_t_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.delta_t_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.5.residual_gate_heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.6.input_proj.weight": [
+   64,
+   134
+  ],
+  "pulse.model.encoders.6.input_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.time_encoder.angular_frequencies": [
+   8
+  ],
+  "pulse.model.encoders.6.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "pulse.model.encoders.6.time_encoder.proj.0.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.6.time_encoder.proj.2.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.time_encoder.norm.weight": [
+   64
+  ],
+  "pulse.model.encoders.6.time_encoder.norm.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.6.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.6.heads.0.weight": [
+   26,
+   64
+  ],
+  "pulse.model.encoders.6.heads.0.bias": [
+   26
+  ],
+  "pulse.model.encoders.6.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.6.obs_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.6.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.6.delta_t_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.6.residual_gate_heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.6.residual_gate_heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.7.input_proj.weight": [
+   64,
+   127
+  ],
+  "pulse.model.encoders.7.input_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.time_encoder.angular_frequencies": [
+   8
+  ],
+  "pulse.model.encoders.7.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "pulse.model.encoders.7.time_encoder.proj.0.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.7.time_encoder.proj.2.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.time_encoder.norm.weight": [
+   64
+  ],
+  "pulse.model.encoders.7.time_encoder.norm.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "pulse.model.encoders.7.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "pulse.model.encoders.7.heads.0.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.7.heads.0.bias": [
+   1
+  ],
+  "pulse.model.encoders.7.heads.1.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.7.heads.1.bias": [
+   1
+  ],
+  "pulse.model.encoders.7.heads.2.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.7.heads.2.bias": [
+   1
+  ],
+  "pulse.model.encoders.7.heads.3.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.7.heads.3.bias": [
+   1
+  ],
+  "pulse.model.encoders.7.heads.4.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.7.heads.4.bias": [
+   1
+  ],
+  "pulse.model.encoders.7.heads.5.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.7.heads.5.bias": [
+   1
+  ],
+  "pulse.model.encoders.7.heads.6.weight": [
+   1,
+   64
+  ],
+  "pulse.model.encoders.7.heads.6.bias": [
+   1
+  ]
+ },
+ "policy": {
+  "model.model.cont_means": [
+   37
+  ],
+  "model.model.cont_stds": [
+   37
+  ],
+  "model.model.encoders.0.input_proj.weight": [
+   64,
+   128
+  ],
+  "model.model.encoders.0.input_proj.bias": [
+   64
+  ],
+  "model.model.encoders.0.time_encoder.angular_frequencies": [
+   8
+  ],
+  "model.model.encoders.0.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "model.model.encoders.0.time_encoder.proj.0.bias": [
+   64
+  ],
+  "model.model.encoders.0.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.0.time_encoder.proj.2.bias": [
+   64
+  ],
+  "model.model.encoders.0.time_encoder.norm.weight": [
+   64
+  ],
+  "model.model.encoders.0.time_encoder.norm.bias": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.0.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.0.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.0.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.0.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.0.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.0.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.0.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.0.heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.0.heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.0.heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.0.heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.0.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.obs_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.0.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.obs_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.0.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.obs_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.0.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.obs_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.0.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.delta_t_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.0.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.delta_t_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.0.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.delta_t_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.0.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.0.delta_t_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.1.input_proj.weight": [
+   64,
+   128
+  ],
+  "model.model.encoders.1.input_proj.bias": [
+   64
+  ],
+  "model.model.encoders.1.time_encoder.angular_frequencies": [
+   8
+  ],
+  "model.model.encoders.1.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "model.model.encoders.1.time_encoder.proj.0.bias": [
+   64
+  ],
+  "model.model.encoders.1.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.1.time_encoder.proj.2.bias": [
+   64
+  ],
+  "model.model.encoders.1.time_encoder.norm.weight": [
+   64
+  ],
+  "model.model.encoders.1.time_encoder.norm.bias": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.1.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.1.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.1.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.1.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.1.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.1.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.1.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.1.heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.1.heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.1.heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.1.heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.1.heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.1.heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.1.heads.6.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.heads.6.bias": [
+   1
+  ],
+  "model.model.encoders.1.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.obs_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.1.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.obs_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.1.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.obs_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.1.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.obs_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.1.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.obs_heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.1.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.obs_heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.1.obs_heads.6.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.obs_heads.6.bias": [
+   1
+  ],
+  "model.model.encoders.1.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.delta_t_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.1.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.delta_t_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.1.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.delta_t_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.1.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.delta_t_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.1.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.delta_t_heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.1.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.delta_t_heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.1.delta_t_heads.6.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.1.delta_t_heads.6.bias": [
+   1
+  ],
+  "model.model.encoders.2.input_proj.weight": [
+   64,
+   128
+  ],
+  "model.model.encoders.2.input_proj.bias": [
+   64
+  ],
+  "model.model.encoders.2.time_encoder.angular_frequencies": [
+   8
+  ],
+  "model.model.encoders.2.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "model.model.encoders.2.time_encoder.proj.0.bias": [
+   64
+  ],
+  "model.model.encoders.2.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.2.time_encoder.proj.2.bias": [
+   64
+  ],
+  "model.model.encoders.2.time_encoder.norm.weight": [
+   64
+  ],
+  "model.model.encoders.2.time_encoder.norm.bias": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.2.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.2.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.2.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.2.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.2.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.2.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.2.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.2.heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.2.heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.2.heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.2.heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.2.heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.2.heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.2.heads.6.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.heads.6.bias": [
+   1
+  ],
+  "model.model.encoders.2.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.obs_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.2.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.obs_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.2.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.obs_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.2.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.obs_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.2.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.obs_heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.2.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.obs_heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.2.obs_heads.6.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.obs_heads.6.bias": [
+   1
+  ],
+  "model.model.encoders.2.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.delta_t_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.2.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.delta_t_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.2.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.delta_t_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.2.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.delta_t_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.2.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.delta_t_heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.2.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.delta_t_heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.2.delta_t_heads.6.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.2.delta_t_heads.6.bias": [
+   1
+  ],
+  "model.model.encoders.3.input_proj.weight": [
+   64,
+   128
+  ],
+  "model.model.encoders.3.input_proj.bias": [
+   64
+  ],
+  "model.model.encoders.3.time_encoder.angular_frequencies": [
+   8
+  ],
+  "model.model.encoders.3.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "model.model.encoders.3.time_encoder.proj.0.bias": [
+   64
+  ],
+  "model.model.encoders.3.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.3.time_encoder.proj.2.bias": [
+   64
+  ],
+  "model.model.encoders.3.time_encoder.norm.weight": [
+   64
+  ],
+  "model.model.encoders.3.time_encoder.norm.bias": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.3.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.3.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.3.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.3.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.3.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.3.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.3.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.3.heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.3.heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.3.heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.3.heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.3.heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.3.heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.3.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.obs_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.3.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.obs_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.3.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.obs_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.3.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.obs_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.3.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.obs_heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.3.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.obs_heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.3.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.delta_t_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.3.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.delta_t_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.3.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.delta_t_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.3.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.delta_t_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.3.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.delta_t_heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.3.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.3.delta_t_heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.4.input_proj.weight": [
+   64,
+   128
+  ],
+  "model.model.encoders.4.input_proj.bias": [
+   64
+  ],
+  "model.model.encoders.4.time_encoder.angular_frequencies": [
+   8
+  ],
+  "model.model.encoders.4.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "model.model.encoders.4.time_encoder.proj.0.bias": [
+   64
+  ],
+  "model.model.encoders.4.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.4.time_encoder.proj.2.bias": [
+   64
+  ],
+  "model.model.encoders.4.time_encoder.norm.weight": [
+   64
+  ],
+  "model.model.encoders.4.time_encoder.norm.bias": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.4.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.4.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.4.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.4.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.4.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.4.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.4.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.4.heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.4.heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.4.heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.4.heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.4.heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.4.heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.4.heads.6.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.heads.6.bias": [
+   1
+  ],
+  "model.model.encoders.4.heads.7.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.heads.7.bias": [
+   1
+  ],
+  "model.model.encoders.4.heads.8.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.heads.8.bias": [
+   1
+  ],
+  "model.model.encoders.4.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.obs_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.4.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.obs_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.4.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.obs_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.4.obs_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.obs_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.4.obs_heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.obs_heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.4.obs_heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.obs_heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.4.obs_heads.6.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.obs_heads.6.bias": [
+   1
+  ],
+  "model.model.encoders.4.obs_heads.7.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.obs_heads.7.bias": [
+   1
+  ],
+  "model.model.encoders.4.obs_heads.8.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.obs_heads.8.bias": [
+   1
+  ],
+  "model.model.encoders.4.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.delta_t_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.4.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.delta_t_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.4.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.delta_t_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.4.delta_t_heads.3.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.delta_t_heads.3.bias": [
+   1
+  ],
+  "model.model.encoders.4.delta_t_heads.4.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.delta_t_heads.4.bias": [
+   1
+  ],
+  "model.model.encoders.4.delta_t_heads.5.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.delta_t_heads.5.bias": [
+   1
+  ],
+  "model.model.encoders.4.delta_t_heads.6.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.delta_t_heads.6.bias": [
+   1
+  ],
+  "model.model.encoders.4.delta_t_heads.7.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.delta_t_heads.7.bias": [
+   1
+  ],
+  "model.model.encoders.4.delta_t_heads.8.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.4.delta_t_heads.8.bias": [
+   1
+  ],
+  "model.model.encoders.5.input_proj.weight": [
+   64,
+   128
+  ],
+  "model.model.encoders.5.input_proj.bias": [
+   64
+  ],
+  "model.model.encoders.5.time_encoder.angular_frequencies": [
+   8
+  ],
+  "model.model.encoders.5.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "model.model.encoders.5.time_encoder.proj.0.bias": [
+   64
+  ],
+  "model.model.encoders.5.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.5.time_encoder.proj.2.bias": [
+   64
+  ],
+  "model.model.encoders.5.time_encoder.norm.weight": [
+   64
+  ],
+  "model.model.encoders.5.time_encoder.norm.bias": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.5.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.5.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.5.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.5.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.5.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.5.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.5.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.5.heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.5.heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.5.heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.5.heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.5.heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.5.heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.5.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.5.obs_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.5.obs_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.5.obs_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.5.obs_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.5.obs_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.5.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.5.delta_t_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.5.delta_t_heads.1.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.5.delta_t_heads.1.bias": [
+   1
+  ],
+  "model.model.encoders.5.delta_t_heads.2.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.5.delta_t_heads.2.bias": [
+   1
+  ],
+  "model.model.encoders.6.input_proj.weight": [
+   64,
+   127
+  ],
+  "model.model.encoders.6.input_proj.bias": [
+   64
+  ],
+  "model.model.encoders.6.time_encoder.angular_frequencies": [
+   8
+  ],
+  "model.model.encoders.6.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "model.model.encoders.6.time_encoder.proj.0.bias": [
+   64
+  ],
+  "model.model.encoders.6.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.6.time_encoder.proj.2.bias": [
+   64
+  ],
+  "model.model.encoders.6.time_encoder.norm.weight": [
+   64
+  ],
+  "model.model.encoders.6.time_encoder.norm.bias": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.6.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.6.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.6.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.6.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.6.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.6.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.6.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.6.heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.6.heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.7.input_proj.weight": [
+   64,
+   128
+  ],
+  "model.model.encoders.7.input_proj.bias": [
+   64
+  ],
+  "model.model.encoders.7.time_encoder.angular_frequencies": [
+   8
+  ],
+  "model.model.encoders.7.time_encoder.proj.0.weight": [
+   64,
+   36
+  ],
+  "model.model.encoders.7.time_encoder.proj.0.bias": [
+   64
+  ],
+  "model.model.encoders.7.time_encoder.proj.2.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.7.time_encoder.proj.2.bias": [
+   64
+  ],
+  "model.model.encoders.7.time_encoder.norm.weight": [
+   64
+  ],
+  "model.model.encoders.7.time_encoder.norm.bias": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.0.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.0.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.7.transformer.layers.0.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.0.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.0.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.0.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.7.transformer.layers.0.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.7.transformer.layers.0.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.0.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.0.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.0.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.0.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.1.self_attn.in_proj_weight": [
+   192,
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.1.self_attn.in_proj_bias": [
+   192
+  ],
+  "model.model.encoders.7.transformer.layers.1.self_attn.out_proj.weight": [
+   64,
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.1.self_attn.out_proj.bias": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.1.linear1.weight": [
+   256,
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.1.linear1.bias": [
+   256
+  ],
+  "model.model.encoders.7.transformer.layers.1.linear2.weight": [
+   64,
+   256
+  ],
+  "model.model.encoders.7.transformer.layers.1.linear2.bias": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.1.norm1.weight": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.1.norm1.bias": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.1.norm2.weight": [
+   64
+  ],
+  "model.model.encoders.7.transformer.layers.1.norm2.bias": [
+   64
+  ],
+  "model.model.encoders.7.heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.7.heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.7.obs_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.7.obs_heads.0.bias": [
+   1
+  ],
+  "model.model.encoders.7.delta_t_heads.0.weight": [
+   1,
+   64
+  ],
+  "model.model.encoders.7.delta_t_heads.0.bias": [
+   1
+  ]
+ }
+}

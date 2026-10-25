@@ -1,0 +1,115 @@
+{
+ "digests": {
+  "after_sample": {
+   "dtype": "float32",
+   "sha256": "0110439c83cf7922e3de3c8ca2b06f59f2d40f7c98c56ca9b8483df235bf5440",
+   "shape": [
+    3
+   ]
+  },
+  "initial_bias": {
+   "dtype": "float32",
+   "sha256": "8f006b6261050188ae88f611ad2301f47977984648d3776477dfd0b7048b681d",
+   "shape": [
+    26
+   ]
+  },
+  "mean": {
+   "dtype": "float32",
+   "sha256": "e5e592f21fdfbed888f7722e1bc7c2b0f6d12104824499b365c66f8e50e9cefb",
+   "shape": [
+    5,
+    36
+   ]
+  },
+  "nll": {
+   "dtype": "float32",
+   "sha256": "b9f7114d2d56bad65bab0330edd1e628e5cec3b2886e19832ee1e56255eefe56",
+   "shape": [
+    5,
+    36
+   ]
+  },
+  "nll_grad": {
+   "dtype": "float32",
+   "sha256": "4118bd329cbe6e942b68824820cd128c5f0df32a3ce36775774080bcc659ec10",
+   "shape": [
+    5,
+    36,
+    26
+   ]
+  },
+  "param_amps": {
+   "dtype": "float32",
+   "sha256": "320b6ca612cdc8c5d3b959cfd34944706dfec8c5c71908c9886f995eb030301d",
+   "shape": [
+    5,
+    36,
+    8
+   ]
+  },
+  "param_centers": {
+   "dtype": "float32",
+   "sha256": "b10cfb39c29fc7e09488efa3ebdbfe0dea3044421fe5dfc59b6d5f141f20d0eb",
+   "shape": [
+    5,
+    36,
+    8
+   ]
+  },
+  "param_loc": {
+   "dtype": "float32",
+   "sha256": "46f003944bc75a1dcee80aa90a6a5e9a58204b74d215234a5b3f4cde2f9bed64",
+   "shape": [
+    5,
+    36
+   ]
+  },
+  "param_scale": {
+   "dtype": "float32",
+   "sha256": "2a93e12c562200c6345a70141df6e542ea9efb1ac03eb5ee00db46561f255f85",
+   "shape": [
+    5,
+    36
+   ]
+  },
+  "param_widths": {
+   "dtype": "float32",
+   "sha256": "aef08395af7b920a423f21b6ca3732f9bc1e53798b06779dae433985007287d5",
+   "shape": [
+    5,
+    36,
+    8
+   ]
+  },
+  "quantiles": {
+   "dtype": "float32",
+   "sha256": "7b9ac0d306afdc11178f4793caeb8a31da14313f879f0f52f31e5d8c8518b917",
+   "shape": [
+    5,
+    36,
+    19
+   ]
+  },
+  "sample_given": {
+   "dtype": "float32",
+   "sha256": "594673a667ead9ffe100d5237e37f225def80ff8e92713dae1f012eb1299891a",
+   "shape": [
+    5,
+    36
+   ]
+  },
+  "sample_global": {
+   "dtype": "float32",
+   "sha256": "db7dce01ce4e45eba766c55fb458dd3bb0ff519219bd53205a8c17bddeeb8060",
+   "shape": [
+    5,
+    36
+   ]
+  }
+ },
+ "meta": {
+  "reference": "reference implementation",
+  "torch": "2.13.0"
+ }
+}
