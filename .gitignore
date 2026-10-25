@@ -3,3 +3,11 @@ __pycache__/
 .pytest_cache/
 /runs/
 /cache/
+# Patient data and everything derived from it stay out of the repository,
+# wherever they are written: caches, checkpoints, rollouts and source tables.
+*.pt
+*.duckdb
+*.parquet
+*.csv
+*.csv.gz
+*.npz
