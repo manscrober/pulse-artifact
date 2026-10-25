@@ -51,18 +51,9 @@ def test_generator_after_each_call(expected, arm):
             expected(f"{arm}.k{k}.first{first}.after", torch.rand(2))
 
 
-def test_sobol_table_leaves_generator_alone():
-    torch.manual_seed(0)
-    expected = torch.rand(3)
-    torch.manual_seed(0)
-    table = S.sobol_table(8)
-    assert table.shape == (8, 24, 8) and torch.equal(torch.rand(3), expected)
-    assert torch.equal(table, S.sobol_table(8))
-
-
 def test_arm_rules():
     with pytest.raises(ValueError):
-        S.Arm("sample", sobol=True)
+        S.Arm("sample", feedback=True)
     with pytest.raises(ValueError):
         S.Arm("sample", two_pass=True, quantiles=True)
 
@@ -91,7 +82,7 @@ def test_rollout_provenance_is_recorded_and_checked(tmp_path):
             S.evaluate(pulse, policy, S.ARMS["sample"], test, 6, 1, tmp_path, provenance=other)
 
 
-SKIP_ARMS = ["sample", "sample_sobol", "distribution", "mean_only"]
+SKIP_ARMS = ["sample", "sample_twopass", "distribution", "mean_only"]
 
 
 @pytest.fixture

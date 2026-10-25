@@ -1,10 +1,9 @@
 """The rows of the paper's component table (Table 2), each one setting away from the row above.
 
-A row names the PULSE variant (`pulse.model.Architecture`), the rollout arm
-(`pulse.feedback.ARMS`) and the row whose trained weights it uses. Rows that
-change only the rollout reuse the weights of the row above. Every row reads
-the treatment policy at the last row of the event history and, with a point
-head, adds the static noise of the validation patients.
+A row names the PULSE variant (`pulse.model.Architecture`) and the rollout
+arm (`pulse.feedback.ARMS`), and reads its own checkpoint, `<row>.pt`. Every
+row reads the treatment policy at the last row of the event history and,
+with a point head, adds the static noise of the validation patients.
 
 `reference` is the architecture key of the reference driver
 (`density_feedback_full.ARCHITECTURES`), kept to match the published
@@ -23,7 +22,6 @@ class Row:
     label: str
     architecture: Architecture
     arm: str = "sample"
-    weights: str | None = None  # the row whose checkpoint this row reads; None for its own
     reference: str = ""
 
     def __post_init__(self):
@@ -45,7 +43,5 @@ ROWS = {
     # The anchor row also changes the flow to the residual parameterisation, whose location is the
     # anchor plus an unconstrained residual; the reference built gate layers it never used.
     "anchor": Row("+ anchor", Architecture(head="rescnf"), reference="pulse"),
-    "sobol": Row("+ Sobol draws", Architecture(head="rescnf"), arm="sample_sobol", weights="anchor",
-                 reference="pulse"),
     "feedback": Row("+ feedback", Architecture(head="rescnf"), arm="sampled_state", reference="pulse"),
 }

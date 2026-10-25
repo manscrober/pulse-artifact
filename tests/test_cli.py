@@ -66,7 +66,7 @@ def test_train_fits_the_weights_each_row_reads(monkeypatch, tmp_path, capsys):
     with pytest.raises(SystemExit, match="unknown rows"):
         cli.main(["train", "--out", str(tmp_path), "--rows", "unknown"])
     (tmp_path / "policy.pt").write_text("")
-    cli.main(["train", "--out", str(tmp_path), "--rows", "point", "sobol", "anchor", "feedback"])
+    cli.main(["train", "--out", str(tmp_path), "--rows", "point", "anchor", "feedback"])
     assert calls == [("point", "sample", "saved policy", ROWS["point"].architecture),
                      ("anchor", "sample", "saved policy", ROWS["anchor"].architecture),
                      ("feedback", "distribution", "saved policy", ROWS["feedback"].architecture)]
@@ -79,7 +79,7 @@ def test_rollout_names_missing_checkpoints_before_starting(monkeypatch, tmp_path
     for name in ("protocol.json", "policy.pt", "sample.pt"):
         (tmp_path / name).write_text("")
     with pytest.raises(SystemExit) as refused:
-        cli.main(["rollout", "--checkpoints", str(tmp_path), "--arms", "sample", "distribution", "no_sobol"])
+        cli.main(["rollout", "--checkpoints", str(tmp_path), "--arms", "sample", "distribution", "mean_only"])
     assert str(refused.value) == f"missing checkpoint files: {tmp_path / 'distribution.pt'}" and not started
 
 
@@ -147,14 +147,14 @@ def test_rollout_of_the_baseline_adds_static_noise(monkeypatch, tmp_path):
 
 def test_rollout_of_rows_reads_each_row_with_its_variant_and_weights(monkeypatch, tmp_path):
     calls = fake_rollouts(monkeypatch, tmp_path, ("point.pt", "anchor.pt"))
-    cli.main(["rollout", "--checkpoints", str(tmp_path / "checkpoints"), "--rows", "point", "sobol",
+    cli.main(["rollout", "--checkpoints", str(tmp_path / "checkpoints"), "--rows", "point", "anchor",
               "--origins", "6", "--out", str(tmp_path)])
-    point, sobol = calls
+    point, anchor = calls
     assert point[:3] == ("point.pt", S.ARMS["sample"], 6) and point[4] == tmp_path / "point" / "k6"
-    assert sobol[:3] == ("anchor.pt", S.ARMS["sample_sobol"], 6) and sobol[4] == tmp_path / "sobol" / "k6"
-    assert point[7] == ("static noise of", "validation part") and sobol[7] is None
-    assert point[8] is True and sobol[8] is True  # without --policy-at-last-event
-    assert (point[9], sobol[9]) == (ROWS["point"].architecture, ROWS["anchor"].architecture)
+    assert anchor[:3] == ("anchor.pt", S.ARMS["sample"], 6) and anchor[4] == tmp_path / "anchor" / "k6"
+    assert point[7] == ("static noise of", "validation part") and anchor[7] is None
+    assert point[8] is True and anchor[8] is True  # without --policy-at-last-event
+    assert (point[9], anchor[9]) == (ROWS["point"].architecture, ROWS["anchor"].architecture)
     with pytest.raises(SystemExit, match="missing checkpoint files"):
         cli.main(["rollout", "--checkpoints", str(tmp_path / "checkpoints"), "--rows", "feedback"])
 

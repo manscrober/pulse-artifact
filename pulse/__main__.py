@@ -197,7 +197,7 @@ def train(args) -> None:
     # Each fit: the name of its checkpoint, its phase and its PULSE variant.
     fits = [(phase, phase, M.Architecture()) for phase in phases]
     fits += [(name, ARMS[ROWS[name].arm].weights, ROWS[name].architecture)
-             for name in dict.fromkeys(ROWS[row].weights or row for row in args.rows)]
+             for name in dict.fromkeys(args.rows)]
     readers = [name for name, phase, _ in fits if phase not in ("policy", T.BASELINE)]
     if readers and "policy" not in phases and not (args.out / "policy.pt").is_file():
         raise SystemExit(f"{args.out / 'policy.pt'} is missing: {readers} read the policy; train it first, "
@@ -250,7 +250,7 @@ def rollout(args) -> None:
             plans[name] = (S.ARMS[name].weights, S.ARMS[name], M.Architecture(), args.policy_at_last_event)
     for name in args.rows:
         row = ROWS[name]
-        plans[name] = (row.weights or name, S.ARMS[row.arm], row.architecture, True)
+        plans[name] = (name, S.ARMS[row.arm], row.architecture, True)
 
     # Every file the rollouts need is checked before the first one starts, so a
     # missing checkpoint does not stop a long run halfway.

@@ -51,8 +51,7 @@ def record(expected, prefix, o):
 
 
 def test_rows_name_known_settings():
-    assert len(ROWS) == 10 and len(ARCHITECTURES) == 8
-    assert all(row.weights in (None, *ROWS) for row in ROWS.values())
+    assert len(ROWS) == 9 and len(ARCHITECTURES) == 8
 
 
 @pytest.mark.parametrize("reference", list(ARCHITECTURES))

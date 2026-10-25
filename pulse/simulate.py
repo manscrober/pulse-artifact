@@ -53,22 +53,6 @@ SEED = 500_000
 PER_CALL = 8
 
 
-SOBOL_SEED = 362
-
-
-def sobol_table(paths: int, device=None) -> torch.Tensor:
-    """Scrambled Sobol points [P, T, K]: path p uses row p for every patient, hour t column t.
-
-    With binary branches drawn from these points, the paths of a patient
-    cover the unit cube of branch decisions evenly; the same points serve
-    every patient and arm. The seeded engine leaves the global generator
-    untouched.
-    """
-    steps, k = 24, len(V.BINARY)
-    engine = torch.quasirandom.SobolEngine(steps * k, scramble=True, seed=SOBOL_SEED)
-    return engine.draw(paths).reshape(paths, steps, k).to(device)
-
-
 def static_noise(part) -> tuple[torch.Tensor, torch.Tensor]:
     """Mean and SD [V] of the change between consecutive recorded hours, in physical units.
 
@@ -230,16 +214,14 @@ class _EventHistory:
         return rows, cols
 
 
-def _next_binaries(core, arm: Arm, x: dict, logits: torch.Tensor, history: _EventHistory, uniforms, hour: int,
+def _next_binaries(core, arm: Arm, x: dict, logits: torch.Tensor, history: _EventHistory,
                    additions) -> tuple[dict, torch.Tensor, torch.Tensor]:
     """The next-hour outputs, the drawn outcomes [R, K_out] and their probabilities [R, K_out]."""
     outcome, lengths = core.binary_output_indices, history.lengths
     last = (lengths - 1).view(-1, 1, 1).expand(-1, 1, logits.shape[-1])
     if arm.two_pass:
         probs = torch.sigmoid(logits).gather(1, last)[:, 0, :]
-        # The reference counts Sobol hours from the origin, one per step,
-        # so the column is the current row.
-        outcomes = (uniforms(probs, outcome, hour) < probs).float()
+        outcomes = (torch.rand_like(probs) < probs).float()
         # Row j conditions on the outcomes realised at row j + 1 and the
         # last row on the new draw.
         realised = history.binary[..., outcome]
@@ -289,15 +271,8 @@ def rollout(model: FeedbackPULSE | GTransformer, policy: Policy, arm: Arm, batch
     cont, binary, times, static, keep = _recorded_rows(batch, k, paths, means)
     baseline = cont[:, 0].clone()
     history = _EventHistory(cont, binary, keep, times, k)
-    table = sobol_table(paths, cont.device) if arm.sobol else None
     feedback = (RolloutFeedback(model, rows_total, steps, quantiles=arm.quantiles, probabilities=arm.probabilities,
                                 mean_state=arm.mean_state) if arm.feedback else None)
-    path_of_row = torch.arange(rows_total, device=cont.device) % paths
-
-    def uniforms(probs: torch.Tensor, columns: list[int], hour: int) -> torch.Tensor:
-        if table is None:
-            return torch.rand_like(probs)
-        return table[path_of_row, hour][:, columns].reshape_as(probs)
 
     last = last_recorded_row(k)
     for t in range(last, steps - 1):
@@ -314,7 +289,7 @@ def rollout(model: FeedbackPULSE | GTransformer, policy: Policy, arm: Arm, batch
             x = core.inputs(model_input)
             additions = None if feedback is None else feedback.additions()
             logits = core.binary_logits(x, additions)
-            out, next_outcomes, bin_probs = _next_binaries(core, arm, x, logits, history, uniforms, t, additions)
+            out, next_outcomes, bin_probs = _next_binaries(core, arm, x, logits, history, additions)
 
         obs_probs = torch.sigmoid(out["obs_logits"][:, 0, :]).clamp(1e-6, 1.0 - 1e-6)
         observed = torch.rand_like(obs_probs) < obs_probs
@@ -342,7 +317,7 @@ def rollout(model: FeedbackPULSE | GTransformer, policy: Policy, arm: Arm, batch
             vaso_logits = treatment["binary_treatment_logits"][:, -1, :]
             bolus_volume = treatment["continuous_treatments"][:, -1, :]
         vaso_probs = torch.sigmoid(vaso_logits)
-        vaso_draw = (uniforms(vaso_probs, [vaso], t) < vaso_probs).float()
+        vaso_draw = (torch.rand_like(vaso_probs) < vaso_probs).float()
         next_cont[:, [bolus]] = bolus_volume
 
         next_bin = binary[:, t, :].clone()

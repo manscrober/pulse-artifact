@@ -162,4 +162,4 @@ def test_rollout_takes_only_the_sample_arm():
 
     model, policy, noise, test = rollout_setup()
     with pytest.raises(ValueError):
-        S.rollout(model, policy, S.ARMS["sample_sobol"], test, 6, 2, noise=noise)
+        S.rollout(model, policy, S.ARMS["sample_twopass"], test, 6, 2, noise=noise)

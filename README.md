@@ -187,12 +187,10 @@ each variable is recorded.
 The rows of the component table (Table 3 of the camera-ready paper) are settings of
 `pulse/rows.py` and train with `--rows`. Each row names a PULSE variant
 (`pulse.model.Architecture`: the continuous head, the time encoding, the
-timing head and the event-time inputs), its rollout arm and, when it
-changes only the rollout, the row whose weights it reads. A row trains the
-phase its arm reads with the optimisation above, `sample` for every row
-except the feedback row, which trains `distribution`, and its weights go to
-`<out>/<row>.pt`. The Sobol row reads the weights of the anchor row, so
-naming it trains `anchor.pt`.
+timing head and the event-time inputs) and its rollout arm. A row trains
+the phase its arm reads with the optimisation above, `sample` for every
+row except the feedback row, which trains `distribution`, and its weights
+go to `<out>/<row>.pt`.
 
 A fit that stops, for example when a cluster preempts the job, continues
 when the same command is run again. While a phase or a row trains,
@@ -274,17 +272,25 @@ The rollout variants are the keys of `pulse.simulate.ARMS`, used unchanged
 in the command line, directory names and scored rows. The table gives the
 settings of each variant and its name in the paper.
 
-| `ARMS` key | weights | two-pass step | descriptor history | descriptors | mean state | Sobol draws | paper |
-|---|---|---|---|---|---|---|---|
-| `sample` | sample | no | no | none | no | no | Sampled history |
-| `sample_twopass` | sample | yes | no | none | no | no | [label to confirm] |
-| `sample_sobol` | sample | yes | no | none | no | yes | [label to confirm] |
-| `distribution` | distribution | yes | yes | quantiles and probabilities | yes | yes | PULSE distribution history |
-| `no_sobol` | distribution | yes | yes | quantiles and probabilities | yes | no | [label to confirm] |
-| `sampled_state` | distribution | yes | yes | quantiles and probabilities | no | yes | [label to confirm] |
-| `mean_only` | sample | yes | yes | none | yes | no | [label to confirm] |
-| `quantile_only` | quantile_only | yes | yes | quantiles | no | no | [label to confirm] |
-| `probability_only` | probability_only | yes | yes | probabilities | no | no | [label to confirm] |
+| `ARMS` key | weights | two-pass step | descriptor history | descriptors | mean state | paper |
+|---|---|---|---|---|---|---|
+| `sample` | sample | no | no | none | no | Sampled history |
+| `sample_twopass` | sample | yes | no | none | no | [label to confirm] |
+| `distribution` | distribution | yes | yes | quantiles and probabilities | yes | PULSE distribution history |
+| `sampled_state` | distribution | yes | yes | quantiles and probabilities | no | [label to confirm] |
+| `mean_only` | sample | yes | yes | none | yes | [label to confirm] |
+| `quantile_only` | quantile_only | yes | yes | quantiles | no | [label to confirm] |
+| `probability_only` | probability_only | yes | yes | probabilities | no | [label to confirm] |
+
+Every arm draws the binary outcomes and the vasopressor indicator with
+independent uniform numbers. Until 25 October 2026 the reference
+implementation and this package could instead draw them from one scrambled
+Sobol table: path p used row p of the table for every patient, so the same
+number decided, say, death on path p in a given hour for all patients. The
+published `distribution` and `sampled_state` runs and the Sobol and
+feedback rows of the component table used that table. The option was
+removed, the `distribution` arm is the former `no_sobol` arm, and `score`
+still reproduces the published tables from their saved rollouts.
 
 In the two-pass step the binary outcomes of the next hour are drawn first
 and the continuous laws are conditioned on that draw; the single-pass
@@ -322,18 +328,18 @@ origins.
 Table 3 of the camera-ready paper, the cumulative component comparison,
 with its appendix companions: Table A.6 repeats it at origin 2 and Table
 A.7 gives the paired changes against the row above; the binary outcome
-scores give its AUROC column. The commands train the nine weight sets of the ten rows
+scores give its AUROC column. The commands train the nine rows
 into a directory of their own, roll out every row with 100 paths, and
 score the rows in the order of the table, so the point row is the
 reference and every row is also compared with the row above:
 
 ```
 python -m pulse train --out runs/rows --phases policy \
-    --rows point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback
+    --rows point continuous_time timing_head event_inputs gaussian mixture flow anchor feedback
 python -m pulse rollout --checkpoints runs/rows --out runs/rows/rollouts --paths 100 \
-    --rows point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback
+    --rows point continuous_time timing_head event_inputs gaussian mixture flow anchor feedback
 python -m pulse score --protocol runs/rows/protocol.json --rollouts runs/rows/rollouts --pit \
-    --arms point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback \
+    --arms point continuous_time timing_head event_inputs gaussian mixture flow anchor feedback \
     --out tables/components.json --binary-out tables/components_binary.json
 ```
 
@@ -343,9 +349,9 @@ scored rows), with carry-forward as the forecast without a model:
 
 ```
 python -m pulse rollout --checkpoints runs/rows --eicu cache/eicu.pt --out runs/rows/eicu --paths 100 \
-    --rows point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback
+    --rows point continuous_time timing_head event_inputs gaussian mixture flow anchor feedback
 python -m pulse score --protocol runs/rows/protocol.json --eicu cache/eicu.pt --rollouts runs/rows/eicu \
-    --arms point continuous_time timing_head event_inputs gaussian mixture flow anchor sobol feedback \
+    --arms point continuous_time timing_head event_inputs gaussian mixture flow anchor feedback \
     carry_forward --out tables/components_eicu.json
 ```
 
@@ -373,7 +379,6 @@ Origin hour 6:
 | `mixture` | 3.709 | 0.865 | 0.3916 | 0.773 |
 | `flow` | 3.635 | 0.856 | 0.3911 | 0.778 |
 | `anchor` | 3.675 | 0.875 | 0.4004 | 0.807 |
-| `sobol` | 3.655 | 0.866 | 0.3997 | 0.808 |
 | `feedback` | 3.678 | 0.875 | 0.4028 | 0.818 |
 
 Origin hour 2:
@@ -388,7 +393,6 @@ Origin hour 2:
 | `mixture` | 4.195 | 1.001 | 0.4674 | 0.783 |
 | `flow` | 4.172 | 0.994 | 0.4694 | 0.792 |
 | `anchor` | 4.267 | 0.995 | 0.4827 | 0.836 |
-| `sobol` | 4.230 | 0.983 | 0.4817 | 0.835 |
 | `feedback` | 4.232 | 0.990 | 0.4830 | 0.842 |
 
 Tables 3, A.6 and A.7 of the camera-ready paper print the runs of 14 to 19
@@ -426,7 +430,7 @@ history.
 sets are candidates. The published 100-path table, which the scorer
 reproduces bit for bit, holds three arms: `sample`, `distribution` and
 `sampled_state`. The published matched comparison against 100-path
-sampled history holds six: `sample`, `sample_twopass`, `sample_sobol`,
+sampled history holds six: `sample`, `sample_twopass`, `sample_sobol` (no longer provided),
 `distribution`, `sampled_state` and `mean_only`. Replace this bracket
 with the chosen set, and add its expected numbers, before release.]**
 The command takes the arms after the reference `sample`:
@@ -530,10 +534,10 @@ add their expected numbers, before release.]**
 
 ```
 python -m pulse train --phases quantile_only probability_only     # reads runs/checkpoints/policy.pt
-python -m pulse rollout --arms sample mean_only no_sobol quantile_only probability_only --paths 16 \
+python -m pulse rollout --arms sample mean_only distribution quantile_only probability_only --paths 16 \
     --out runs/rollouts16
 python -m pulse score --rollouts runs/rollouts16 \
-    --arms sample mean_only no_sobol quantile_only probability_only --out tables/components.json
+    --arms sample mean_only distribution quantile_only probability_only --out tables/components.json
 ```
 
 ## Runtimes
@@ -570,13 +574,11 @@ calls of 8 that cover the 894 test patients.
 |---|---|---|
 | `sample` | 32 + 27 | 1.8 |
 | `sample_twopass` | 20 + 21 | 1.3 |
-| `sample_sobol` | 17 + 16 | 1.0 |
 | `mean_only` | 51 + 55 | 3.3 |
 | `quantile_only` | 46 + 45 | 2.8 |
 | `probability_only` | 42 + 61 | 3.2 |
 | `sampled_state` | 61 + 65 | 3.9 |
-| `no_sobol` | 59 + 84 | 4.4 |
-| `distribution` | 80 + 83 | 5.1 |
+| `distribution` | 59 + 84 | 4.4 |
 
 ## Reproduction and its limits
 
@@ -592,13 +594,14 @@ the MIMIC Code Repository at release v3.0.1; a rebuilt cache equals the
 published one except for 11 continuous entries of 2 stays, which differ by
 one unit in the last place (point 1 below); preparation of the published
 cache reproduces every prepared tensor, the statistics and the covariance
-groups; rollouts of all nine arms for 8 test patients with 100 paths equal
+groups; rollouts of all nine arms of that time (seven of them kept) for 8 test patients with 100 paths equal
 those of the reference implementation (the quantile-only and
 probability-only arms with the distribution-history weights, as their own
 published weights were not yet available); and so do the first training
 updates of the policy and of the sampled- and distribution-history models.
-With the weights of the component table, rollouts of all ten rows for 8 test
-patients with 100 paths equal those of the reference implementation, and on
+With the weights of the component table, rollouts of the ten rows of that time
+for 8 test patients with 100 paths equal those of the reference
+implementation, and on
 synthetic data so do every row's initial weights, outputs and first training
 updates.
 
