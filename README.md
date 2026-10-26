@@ -287,10 +287,12 @@ independent uniform numbers. Until 25 October 2026 the reference
 implementation and this package could instead draw them from one scrambled
 Sobol table: path p used row p of the table for every patient, so the same
 number decided, say, death on path p in a given hour for all patients. The
-published `distribution` and `sampled_state` runs and the Sobol and
-feedback rows of the component table used that table. The option was
-removed, the `distribution` arm is the former `no_sobol` arm, and `score`
-still reproduces the published tables from their saved rollouts.
+published `distribution` and `sampled_state` runs, and the Sobol and
+feedback rows of the component table until 25 October 2026, used that
+table. The option was removed with the Sobol row, the `distribution` arm is
+the former `no_sobol` arm, and the camera-ready paper rolls the feedback
+row out again with independent draws; `score` still reproduces the
+published tables from their saved rollouts.
 
 In the two-pass step the binary outcomes of the next hour are drawn first
 and the continuous laws are conditioned on that draw; the single-pass
@@ -379,7 +381,7 @@ Origin hour 6:
 | `mixture` | 3.709 | 0.865 | 0.3916 | 0.773 |
 | `flow` | 3.635 | 0.856 | 0.3911 | 0.778 |
 | `anchor` | 3.675 | 0.875 | 0.4004 | 0.807 |
-| `feedback` | 3.678 | 0.875 | 0.4028 | 0.818 |
+| `feedback` | 3.713 | 0.881 | 0.4038 | 0.817 |
 
 Origin hour 2:
 
@@ -393,14 +395,15 @@ Origin hour 2:
 | `mixture` | 4.195 | 1.001 | 0.4674 | 0.783 |
 | `flow` | 4.172 | 0.994 | 0.4694 | 0.792 |
 | `anchor` | 4.267 | 0.995 | 0.4827 | 0.836 |
-| `feedback` | 4.232 | 0.990 | 0.4830 | 0.842 |
+| `feedback` | 4.270 | 1.001 | 0.4843 | 0.842 |
 
 Tables 3, A.6 and A.7 of the camera-ready paper print the runs of 14 to 19
 October, made before the policy read was corrected: they read the policy's
 decision at the last of the 24 padded rows, where the simulated vasopressor
 switches far more often than recorded ones do (Appendix A.7 of the
-camera-ready paper), and rows 8 to 10 use a second policy fit, trained with
-the anchor row. `score` reproduces every estimate and interval of those
+camera-ready paper), and rows 8 and 9 use a second policy fit, trained with
+the anchor row. The feedback row of those tables was rolled out again in
+the same setting on 26 October with independent draws. `score` reproduces every estimate and interval of those
 tables from their saved rollouts (level (b)). `rollout --rows` reads the
 policy at the last event only, so the commands above do not regenerate
 those rollouts.
