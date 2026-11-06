@@ -14,6 +14,11 @@ history and is not expected to reproduce those exact scores. The saved
 experiments used a subject-disjoint training split. Their patient-level
 forecasts and trained weights are not included here.
 
+A separate three-epoch validation fit initialized the B-spline from a
+two-Gaussian-mixture model and obtained similar scores on 128 validation
+patients. The fits used different training budgets and devices; this
+mixture initialization is not currently included in this package.
+
 This is research code. Clinical use requires independent validation.
 
 ## Install
