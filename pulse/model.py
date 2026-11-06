@@ -11,8 +11,8 @@ next value of their variables. Time enters through a learned encoding of
 the elapsed hours and of the gap since the previous row.
 
 PULSE predicts each continuous variable with one of the heads of
-`pulse.heads`; the published model uses the residual CNF, anchored at the
-variable's last recorded standardised value. `Architecture` holds the
+`pulse.heads`; the default uses a direct-location B-spline. The continuous
+flow and its anchored variant remain available. `Architecture` holds the
 switches of the component table: the head, the time encoding, the head
 for the hours until the next record, and the event-time inputs. The
 policy predicts bolus volume as a point and the vasopressor indicator as a
@@ -56,7 +56,7 @@ class Architecture:
     unmarked.
     """
 
-    head: str = "rescnf"
+    head: str = "bspline"
     time: str = "continuous"
     timing_head: bool = True
     event_inputs: bool = True
@@ -452,7 +452,7 @@ def build_policy(protocol: Protocol) -> Policy:
 # The artifact saves {"state": state_dict, "history": per-epoch validation
 # losses, "cache_sha256": content digest of the training cache} and, for a
 # PULSE model, "architecture": its `Architecture` as a dict; a checkpoint
-# without one holds the published PULSE. It reads them without unpickling.
+# without one holds the earlier anchored-flow model. It reads them without unpickling.
 # Checkpoints of the reference implementation hold the state under "model"
 # with longer names and pickle their configuration; only
 # `read_reference_state` reads them, mapping the names as follows:
@@ -477,7 +477,8 @@ def reference_pulse_state(state: dict[str, torch.Tensor]) -> dict[str, torch.Ten
 
 
 def save_checkpoint(path, model: nn.Module, history: list[dict], cache_sha256: str,
-                    architecture: Architecture | None = None, sources: tuple[str, ...] = ()) -> None:
+                    architecture: Architecture | None = None, sources: tuple[str, ...] = (),
+                    initialization: dict | None = None) -> None:
     """Weights, validation history, the cache digest of the protocol the model was trained with and,
     when given, the PULSE variant and the digests of further caches whose stays joined the training part."""
     path = Path(path)
@@ -488,6 +489,8 @@ def save_checkpoint(path, model: nn.Module, history: list[dict], cache_sha256: s
         payload["architecture"] = asdict(architecture)
     if sources:
         payload["sources"] = list(sources)
+    if initialization is not None:
+        payload["initialization"] = initialization
     pending = path.with_suffix(".pending")
     torch.save(payload, pending)
     pending.replace(path)

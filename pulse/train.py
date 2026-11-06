@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import contextlib
 import math
+import hashlib
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -294,7 +295,8 @@ def validation(model, part: Part, phase: str, micro: int, device) -> float:
 
 def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str = "cpu",
         settings: Settings = Settings(), on_epoch: Callable[[dict], None] | None = None,
-        architecture: M.Architecture = M.Architecture(), name: str | None = None) -> dict:
+        architecture: M.Architecture = M.Architecture(), name: str | None = None,
+        warm_start_cnf: Path | None = None) -> dict:
     """Train one phase; write the best validation weights to `<out>/<name>.pt`.
 
     `<out>/protocol.json` receives the protocol, whose cache digest the
@@ -327,11 +329,16 @@ def fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, devi
     """
     if phase not in PHASES + (BASELINE,):
         raise ValueError(f"unknown phase {phase}")
+    if warm_start_cnf is not None and (phase != "sample" or architecture.head != "bspline"):
+        raise ValueError("CNF initialization requires the B-spline sample phase")
+    if architecture.head == "bspline" and phase in ("distribution", "quantile_only", "probability_only"):
+        raise ValueError("distribution feedback phases require a continuous-flow head")
     protocol = Path(out) / "protocol.json"
     if protocol.exists() and Protocol.load(protocol) != prepared.protocol:
         raise ValueError(f"{protocol} holds another protocol")
     with mps_attention_dropout() if torch.device(device).type == "mps" else contextlib.nullcontext():
-        return _fit(phase, prepared, policy, Path(out), device, settings, on_epoch, architecture, name or phase)
+        return _fit(phase, prepared, policy, Path(out), device, settings, on_epoch, architecture, name or phase,
+                    warm_start_cnf)
 
 
 @dataclass
@@ -378,10 +385,34 @@ def _continue(path: Path, identity: dict, model, optimizer, scheduler, device: s
 
 def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, device: str,
          settings: Settings, on_epoch: Callable[[dict], None] | None, architecture: M.Architecture,
-         name: str) -> dict:
+         name: str, warm_start_cnf: Path | None = None) -> dict:
     if policy is not None:
         policy.to(device)
     model = build(phase, prepared, policy, architecture).to(device)
+    initialization = None
+    if warm_start_cnf is not None:
+        source_path = Path(warm_start_cnf)
+        source = torch.load(source_path, map_location="cpu", weights_only=True)
+        variant = source.get("architecture", {"head": "rescnf"})
+        if variant.get("head") != "cnf":
+            raise ValueError("warm start must be a direct CNF checkpoint")
+        source_state, dest = source["state"], model.state_dict()
+        copied_heads = 0
+        for key, value in source_state.items():
+            if key not in dest:
+                raise ValueError(f"unexpected source tensor {key}")
+            if dest[key].shape == value.shape:
+                dest[key] = value
+            elif ".heads." in key and value.shape[0] == 26 and dest[key].shape[0] == 25 and value.shape[1:] == dest[key].shape[1:]:
+                dest[key][:2] = value[:2]
+                copied_heads += 1
+            else:
+                raise ValueError(f"incompatible warm-start tensor {key}: {value.shape} -> {dest[key].shape}")
+        if copied_heads == 0 or set(source_state) != set(dest):
+            raise ValueError("warm start did not match the complete model")
+        model.load_state_dict(dest, strict=True)
+        initialization = {"kind": "direct_cnf", "sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
+                          "cache_sha256": source.get("cache_sha256"), "copied_heads": copied_heads}
     optimizer, scheduler = optimiser(model, phase, settings.epochs)
     patients = len(prepared.train["continuous"])
     updates_per_epoch = math.ceil(patients / settings.batch)
@@ -390,6 +421,8 @@ def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, dev
                 "cache_sha256": prepared.protocol.cache_sha256, "device": torch.device(device).type}
     if prepared.sources:
         identity["sources"] = list(prepared.sources)
+    if initialization is not None:
+        identity["initialization"] = initialization
     progress = (_continue(continuation, identity, model, optimizer, scheduler, device) if continuation.exists()
                 else _Progress())
 
@@ -430,7 +463,8 @@ def _fit(phase: str, prepared: Prepared, policy: M.Policy | None, out: Path, dev
     out.mkdir(parents=True, exist_ok=True)
     prepared.protocol.save(out / "protocol.json")
     M.save_checkpoint(out / f"{name}.pt", model, progress.history, prepared.protocol.cache_sha256,
-                      architecture if isinstance(model, FeedbackPULSE) else None, prepared.sources)
+                      architecture if isinstance(model, FeedbackPULSE) else None, prepared.sources,
+                      initialization=initialization)
     continuation.unlink(missing_ok=True)
     return {"model": model, "history": progress.history, "validation_loss": progress.best,
             "stopped_early": len(progress.history) < settings.epochs}

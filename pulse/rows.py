@@ -41,6 +41,7 @@ ROWS = {
     "event_inputs": Row("+ event-time inputs", Architecture(head="point"), reference="probe_event_time_direct"),
     "gaussian": Row("+ learned Gaussian", Architecture(head="gaussian"), reference="gaussian_direct"),
     "mixture": Row("+ two-Gaussian mixture", Architecture(head="mog2"), reference="probe_mog2_direct"),
+    "bspline": Row("B-spline", Architecture(head="bspline")),
     "flow": Row("- mixture, + flow", Architecture(head="cnf"), reference="probe_cnf_direct"),
     # The anchor row also changes the flow to the residual parameterisation, whose location is the
     # anchor plus an unconstrained residual; the reference built gate layers it never used.

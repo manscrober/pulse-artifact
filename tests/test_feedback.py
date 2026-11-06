@@ -20,7 +20,7 @@ def test_training_forward(expected, phase):
     data = part(seed=4, n=4)
     history = {k: data[k] for k in ("continuous", "binary", "static", "time_hours", "continuous_mask")}
     policy = frozen_policy()
-    model = F.build_pulse(protocol(), part(seed=6, n=16)["binary"])
+    model = F.build_pulse(protocol(), part(seed=6, n=16)["binary"], M.Architecture(head="rescnf"))
     model.attach_policy(policy)
     expected(f"{phase}.after_init", torch.rand(3))
     if phase == "distribution":
@@ -53,7 +53,7 @@ def test_quantile_features(expected):
 def test_frozen_policy_is_independent_of_grad_mode():
     """The reference calls the trained policy frozen; then grad mode cannot change its outputs."""
     policy = frozen_policy()
-    model = F.FeedbackPULSE(M.pulse_model(protocol()))
+    model = F.FeedbackPULSE(M.pulse_model(protocol(), M.Architecture(head="rescnf")))
     model.attach_policy(policy)
     data = part(seed=4, n=4)
     args = (data["continuous"], data["binary"], data["static"], data["time_hours"])

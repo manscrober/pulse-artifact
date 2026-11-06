@@ -41,7 +41,7 @@ def test_train_runs_phases_in_order_with_the_published_settings(monkeypatch, tmp
     with pytest.raises(SystemExit, match="more than once"):
         cli.main(["train", "--out", str(tmp_path), "--phases", "policy", "sample", "policy"])
     with pytest.raises(SystemExit, match="policy.pt is missing"):
-        cli.main(["train", "--out", str(tmp_path / "empty"), "--phases", "quantile_only"])
+        cli.main(["train", "--out", str(tmp_path / "empty"), "--phases", "quantile_only", "--head", "rescnf"])
     assert len(calls) == 2 and len(prepared) == 1  # refused lists prepare nothing
     cli.main(["train", "--cache", "c.pt", "--out", str(tmp_path), "--phases", "policy", "--epochs", "156",
               "--patience", "16", "--min-epochs", "31"])
@@ -79,7 +79,7 @@ def test_rollout_names_missing_checkpoints_before_starting(monkeypatch, tmp_path
     for name in ("protocol.json", "policy.pt", "sample.pt"):
         (tmp_path / name).write_text("")
     with pytest.raises(SystemExit) as refused:
-        cli.main(["rollout", "--checkpoints", str(tmp_path), "--arms", "sample", "distribution", "no_sobol"])
+        cli.main(["rollout", "--checkpoints", str(tmp_path), "--arms", "sample", "distribution", "no_sobol", "--head", "rescnf"])
     assert str(refused.value) == f"missing checkpoint files: {tmp_path / 'distribution.pt'}" and not started
 
 
@@ -120,7 +120,7 @@ def fake_rollouts(monkeypatch, tmp_path, files) -> list:
 def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
     calls = fake_rollouts(monkeypatch, tmp_path, ("sample.pt", "quantile_only.pt"))
     cli.main(["rollout", "--checkpoints", str(tmp_path / "checkpoints"), "--arms", "sample", "quantile_only",
-              "--paths", "4", "--out", str(tmp_path)])
+              "--paths", "4", "--head", "rescnf", "--out", str(tmp_path)])
     assert [(c[0], c[2], c[4]) for c in calls] == [
         ("sample.pt", 2, tmp_path / "sample" / "k2"), ("sample.pt", 6, tmp_path / "sample" / "k6"),
         ("quantile_only.pt", 2, tmp_path / "quantile_only" / "k2"),
@@ -129,7 +129,7 @@ def test_rollout_writes_one_directory_per_arm_and_origin(monkeypatch, tmp_path):
     assert {c[3] for c in calls} == {4} and {c[5] for c in calls} == {S.PER_CALL}
     assert calls[0][6] == {"policy": "digest of policy.pt", "weights": "digest of sample.pt"}
     assert calls[2][6] == {"policy": "digest of policy.pt", "weights": "digest of quantile_only.pt"}
-    assert all(c[7] is None and c[8] is False and c[9] == M.Architecture() for c in calls)
+    assert all(c[7] is None and c[8] is False and c[9] == M.Architecture(head="rescnf") for c in calls)
     with pytest.raises(SystemExit):
         cli.main(["rollout", "--arms", "unknown"])
     with pytest.raises(SystemExit, match="name the arms, the rows or both"):
@@ -169,7 +169,7 @@ def test_checkpoints_name_the_variant_they_hold(tmp_path):
     with pytest.raises(ValueError, match="another PULSE variant"):
         cli._checkpoint_state(tmp_path / "flow.pt", protocol, anchored)
     # A checkpoint without a recorded variant holds the published PULSE.
-    assert cli._checkpoint_state(tmp_path / "phase.pt", protocol, M.Architecture())
+    assert cli._checkpoint_state(tmp_path / "phase.pt", protocol, M.Architecture(head="rescnf"))
     with pytest.raises(ValueError, match="another PULSE variant"):
         cli._checkpoint_state(tmp_path / "phase.pt", protocol, flow)
     with pytest.raises(ValueError, match="another protocol"):

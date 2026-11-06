@@ -36,10 +36,10 @@ def test_build_train_roll_out_and_score(monkeypatch, tmp_path):
 
     main(["build-cache", "--database", "unused", "--out", str(cache)])
     main(["train", "--cache", str(cache), "--out", str(checkpoints), "--phases", "policy", "sample",
-          "distribution", "--epochs", "1", "--batch", "4", "--micro", "2"])
+          "distribution", "--head", "rescnf", "--epochs", "1", "--batch", "4", "--micro", "2"])
     assert sorted(p.name for p in checkpoints.iterdir()) == ["distribution.pt", "policy.pt", "protocol.json", "sample.pt"]
     rollout = ["rollout", "--cache", str(cache), "--checkpoints", str(checkpoints), "--arms", "sample",
-               "distribution", "--paths", "2", "--per-call", "2", "--out", str(rollouts)]
+               "distribution", "--head", "rescnf", "--paths", "2", "--per-call", "2", "--out", str(rollouts)]
     main(rollout)
     written = {path: path.read_bytes() for path in rollouts.rglob("*") if path.is_file()}
     main(rollout)  # the same command into the same folder keeps every file as it was
@@ -61,7 +61,7 @@ def test_build_train_roll_out_and_score(monkeypatch, tmp_path):
     transfer, transfer_rollouts = tmp_path / "eicu.pt", tmp_path / "eicu_rollouts"
     eicu.save_cache(eicu_like(), transfer)
     main(["rollout", "--cache", str(cache), "--checkpoints", str(checkpoints), "--arms", "sample", "--paths", "2",
-          "--per-call", "2", "--eicu", str(transfer), "--out", str(transfer_rollouts)])
+          "--per-call", "2", "--head", "rescnf", "--eicu", str(transfer), "--out", str(transfer_rollouts)])
     record = json.loads((transfer_rollouts / "sample" / "k6" / "rollout.json").read_text())
     assert record["provenance"]["eicu_cache"] == eicu.load_cache(transfer)["sha256"]
     assert len(list((transfer_rollouts / "sample" / "k2").glob("case_*.pt"))) == 3
@@ -84,3 +84,27 @@ def eicu_like() -> dict:
     stays["static"][:, 1:3] = torch.nan
     stays["time_hours"] = torch.arange(24).float().expand(12, -1).clone()
     return stays
+
+
+@pytest.mark.filterwarnings("ignore:invalid value encountered in divide:RuntimeWarning")
+def test_default_bspline_training_and_rollout(monkeypatch, tmp_path):
+    stays = source_stays(seed=2, count=sum(SPLIT.values()) + 1)
+    monkeypatch.setattr(data, "SPLIT", SPLIT)
+    monkeypatch.setattr(cohort, "_connect", lambda database: types.SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(cohort, "cohort_stays", lambda conn: pd.DataFrame(
+        {"subject_id": [s["subject_id"] for _, s in stays], "stay_id": [s["stay_id"] for _, s in stays]}))
+    monkeypatch.setattr(cohort, "load_stays", lambda conn, stay_ids, subjects: [
+        stay for stay in stays if stay[1]["subject_id"] in subjects])
+    cache, checkpoints, rollouts = tmp_path / "cache.pt", tmp_path / "checkpoints", tmp_path / "rollouts"
+    main(["build-cache", "--database", "unused", "--out", str(cache)])
+    main(["train", "--cache", str(cache), "--out", str(checkpoints),
+          "--epochs", "1", "--batch", "4", "--micro", "2"])
+    payload = torch.load(checkpoints / "sample.pt", weights_only=True)
+    assert payload["architecture"]["head"] == "bspline"
+    main(["rollout", "--cache", str(cache), "--checkpoints", str(checkpoints), "--arms", "sample",
+          "--paths", "2", "--per-call", "2", "--out", str(rollouts)])
+    table = tmp_path / "table.json"
+    main(["score", "--cache", str(cache), "--protocol", str(checkpoints / "protocol.json"),
+          "--rollouts", str(rollouts), "--arms", "sample", "carry_forward", "--resamples", "20",
+          "--out", str(table)])
+    assert {row["arm"] for row in json.loads(table.read_text())["rows"]} == {"sample", "carry_forward"}

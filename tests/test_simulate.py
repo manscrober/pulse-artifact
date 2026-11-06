@@ -17,7 +17,7 @@ ARMS = list(S.ARMS)
 
 def models():
     torch.manual_seed(M.SEED)
-    pulse = M.pulse_model(protocol())
+    pulse = M.pulse_model(protocol(), M.Architecture(head="rescnf"))
     policy = M.build_policy(protocol())
     perturb(pulse, seed=1)
     perturb(policy, seed=2)

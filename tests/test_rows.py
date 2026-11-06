@@ -18,9 +18,11 @@ from pulse.rows import ROWS
 from synthetic import part, perturb, protocol
 
 PATHS, PER_CALL, MICRO = 4, 2, 3
-ARCHITECTURES = {row.reference: row.architecture for row in ROWS.values()}
+ARCHITECTURES = {row.reference: row.architecture for row in ROWS.values() if row.reference}
 ROLLOUT_ARMS = {}
 for row in ROWS.values():
+    if not row.reference:
+        continue
     ROLLOUT_ARMS.setdefault(row.reference, [])
     if row.arm not in ROLLOUT_ARMS[row.reference]:
         ROLLOUT_ARMS[row.reference].append(row.arm)
@@ -51,7 +53,7 @@ def record(expected, prefix, o):
 
 
 def test_rows_name_known_settings():
-    assert len(ROWS) == 10 and len(ARCHITECTURES) == 8
+    assert len(ROWS) == 11 and len(ARCHITECTURES) == 8
     assert all(row.weights in (None, *ROWS) for row in ROWS.values())
 
 

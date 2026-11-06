@@ -50,7 +50,7 @@ def _parser() -> argparse.ArgumentParser:
     train.add_argument("--out", type=Path, default=CHECKPOINTS,
                        help="directory for <phase>.pt, <row>.pt and protocol.json")
     train.add_argument("--phases", nargs="+", default=None,
-                       help="phases to train, in order; default: all PULSE phases, or none with --rows. "
+                       help="phases to train, in order; default: policy and sample, or none with --rows. "
                             "PULSE phases read the policy, trained here or found in --out; gtransformer "
                             "trains the baseline")
     train.add_argument("--rows", nargs="+", default=[],
@@ -61,14 +61,18 @@ def _parser() -> argparse.ArgumentParser:
     train.add_argument("--cotrain-eicu", type=Path, default=None,
                        help="add the training stays of this eICU cache (python -m pulse build-eicu) to the "
                             "training part; validation stays MIMIC's (pulse.eicu.cotrain)")
+    train.add_argument("--head", choices=("bspline", "cnf", "rescnf"), default="bspline",
+                       help="continuous output head for phase training")
+    train.add_argument("--warm-start-cnf", type=Path, default=None,
+                       help="initialize the B-spline sample model from a trained direct-flow checkpoint")
     train.add_argument("--device", default="cpu", help="cpu, cuda or mps")
-    train.add_argument("--epochs", type=int, default=None, help="default: the published 50")
+    train.add_argument("--epochs", type=int, default=None, help="default: 50")
     train.add_argument("--batch", type=int, default=None, help="default: the published 32")
     train.add_argument("--micro", type=int, default=None, help="default: the published 8")
     train.add_argument("--patience", type=int, default=None,
                        help="epochs without a lower validation loss that stop a fit; default: the published 5")
     train.add_argument("--min-epochs", type=int, default=None,
-                       help="epochs that run before a fit can stop; default: the published 10")
+                       help="epochs that run before a fit can stop; default: 10")
 
     rollout = commands.add_parser("rollout", formatter_class=from_defaults,
                                   help="roll out every test patient for arms or rows")
@@ -93,6 +97,8 @@ def _parser() -> argparse.ArgumentParser:
                          help="roll out the first 1,000 test stays of this eICU cache (build-eicu) in place of "
                               "the MIMIC test patients; --cache and the protocol still give the MIMIC training "
                               "statistics and the static noise of point heads")
+    rollout.add_argument("--head", choices=("bspline", "cnf", "rescnf"), default="bspline",
+                         help="continuous output head used by the phase checkpoints")
     rollout.add_argument("--device", default="cpu")
 
     score = commands.add_parser("score", formatter_class=from_defaults,
@@ -151,8 +157,12 @@ def _checkpoint_state(path: Path, protocol, architecture=None) -> dict:
     payload = torch.load(path, map_location="cpu", weights_only=True)
     if payload["cache_sha256"] != protocol.cache_sha256:
         raise ValueError(f"{path} was trained with another protocol than {path.parent / 'protocol.json'}")
-    # A checkpoint that records no variant holds the published PULSE.
-    if architecture is not None and Architecture(**payload.get("architecture", {})) != architecture:
+    # Older artifact checkpoints with no architecture contain the anchored CNF.
+    saved = dict(payload.get("architecture", {"head": "rescnf"}))
+    for key, default in (("observation", True), ("gate", False)):
+        if key in saved and saved.pop(key) != default:
+            raise ValueError(f"{path} uses unsupported {key} configuration")
+    if architecture is not None and Architecture(**saved) != architecture:
         raise ValueError(f"{path} holds another PULSE variant than {architecture}")
     return payload["state"]
 
@@ -178,7 +188,12 @@ def train(args) -> None:
     settings = replace(T.Settings(), **{k: v for k, v in (("epochs", args.epochs), ("batch", args.batch),
                                                           ("micro", args.micro), ("patience", args.patience),
                                                           ("min_epochs", args.min_epochs)) if v is not None})
-    phases = args.phases or ([] if args.rows else list(T.PHASES))
+    default_phases = ("policy", "sample")
+    phases = args.phases or ([] if args.rows else list(default_phases))
+    if args.head == "bspline" and any(x in phases for x in ("distribution", "quantile_only", "probability_only")):
+        raise SystemExit("distribution feedback phases require --head cnf or --head rescnf")
+    if args.warm_start_cnf and (args.head != "bspline" or "sample" not in phases or args.rows):
+        raise SystemExit("--warm-start-cnf requires the B-spline sample phase and no component rows")
     known = list(T.PHASES) + [T.BASELINE]
     unknown = [p for p in phases if p not in known]
     if unknown:
@@ -195,7 +210,7 @@ def train(args) -> None:
     if phases.count("policy") > 1:
         raise SystemExit("policy is named more than once in --phases")
     # Each fit: the name of its checkpoint, its phase and its PULSE variant.
-    fits = [(phase, phase, M.Architecture()) for phase in phases]
+    fits = [(phase, phase, M.Architecture(head=args.head)) for phase in phases]
     fits += [(name, ARMS[ROWS[name].arm].weights, ROWS[name].architecture)
              for name in dict.fromkeys(ROWS[row].weights or row for row in args.rows)]
     readers = [name for name, phase, _ in fits if phase not in ("policy", T.BASELINE)]
@@ -212,10 +227,11 @@ def train(args) -> None:
     for name, phase, architecture in fits:
         if phase not in ("policy", T.BASELINE) and policy is None:
             policy = _load_policy(args.out, prepared.protocol).to(args.device)
+        warm_start = {"warm_start_cnf": args.warm_start_cnf} if phase == "sample" and args.warm_start_cnf else {}
         result = T.fit(phase, prepared, policy, args.out, device=args.device, settings=settings,
                        on_epoch=lambda entry, name=name: print(
                            f"{name} epoch {entry['epoch']}: validation loss {entry['validation_loss']:.6f}",
-                           flush=True), architecture=architecture, name=name)
+                           flush=True), architecture=architecture, name=name, **warm_start)
         if phase == "policy":
             policy = result["model"]
         print(f"{name}: best validation loss {result['validation_loss']:.6f} -> {args.out / (name + '.pt')}")
@@ -239,6 +255,9 @@ def rollout(args) -> None:
     if unknown:
         raise SystemExit(f"unknown rows {unknown}; choose from {list(ROWS)}")
 
+    if args.head == "bspline" and any(S.ARMS[name].feedback for name in args.arms if name in S.ARMS):
+        raise SystemExit("distribution feedback arms require --head cnf or --head rescnf")
+
     # Each rollout directory: the checkpoint it reads, its arm, its PULSE
     # variant (None for the baseline) and whether the policy is read at the
     # last event.
@@ -247,7 +266,7 @@ def rollout(args) -> None:
         if name == T.BASELINE:
             plans[name] = (name, S.ARMS["sample"], None, args.policy_at_last_event)
         else:
-            plans[name] = (S.ARMS[name].weights, S.ARMS[name], M.Architecture(), args.policy_at_last_event)
+            plans[name] = (S.ARMS[name].weights, S.ARMS[name], M.Architecture(head=args.head), args.policy_at_last_event)
     for name in args.rows:
         row = ROWS[name]
         plans[name] = (row.weights or name, S.ARMS[row.arm], row.architecture, True)

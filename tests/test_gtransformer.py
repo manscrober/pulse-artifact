@@ -73,7 +73,7 @@ def prepared():
 
 def test_predicts_the_variables_pulse_predicts():
     from pulse import model as M
-    pulse = M.pulse_model(protocol())
+    pulse = M.pulse_model(protocol(), M.Architecture(head="rescnf"))
     model = G.gtransformer_model(protocol())
     assert model.output_indices == pulse.output_indices
     assert model.binary_output_indices == pulse.binary_output_indices

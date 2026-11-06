@@ -37,7 +37,7 @@ def flat(named) -> torch.Tensor:
 def test_first_updates(expected, phase):
     """One epoch of two updates, validation, then the first update of the second epoch."""
     data = prepared()
-    model = T.build(phase, data, None if phase == "policy" else frozen_policy())
+    model = T.build(phase, data, None if phase == "policy" else frozen_policy(), M.Architecture(head="rescnf"))
     optimizer, scheduler = T.optimiser(model, phase, epochs=2)
     model.train()
     order = T.epoch_order(0, 7)
@@ -59,7 +59,7 @@ def test_fit(expected, phase, tmp_path, capsys):
     settings = T.Settings(epochs=3, batch=BATCH, micro=MICRO, patience=1, min_epochs=2)
     reported = []
     result = T.fit(phase, prepared(), None if phase == "policy" else frozen_policy(), tmp_path, "cpu", settings,
-                   on_epoch=reported.append)
+                   on_epoch=reported.append, architecture=M.Architecture(head="rescnf"))
     assert reported == result["history"] and capsys.readouterr().out == ""
     losses = [h["validation_loss"] for h in result["history"]]
     expected(f"fit.{phase}.validation", torch.tensor(losses, dtype=torch.float64))
@@ -72,7 +72,7 @@ def test_fit(expected, phase, tmp_path, capsys):
     assert D.Protocol.load(tmp_path / "protocol.json") == protocol()
     assert all(torch.equal(saved["state"][k], v) for k, v in result["model"].state_dict().items())
     # PULSE checkpoints record their variant; the policy records none.
-    assert saved.get("architecture") == (None if phase == "policy" else dataclasses.asdict(M.Architecture()))
+    assert saved.get("architecture") == (None if phase == "policy" else dataclasses.asdict(M.Architecture(head="rescnf")))
     if phase == "policy":
         assert not result["model"].training
         assert not any(p.requires_grad for p in result["model"].parameters())
@@ -89,7 +89,7 @@ def test_fit_of_a_row_is_saved_under_its_name_with_its_variant(tmp_path):
 
 def _sample_model_and_batch():
     data = prepared()
-    model = T.build("sample", data, frozen_policy())
+    model = T.build("sample", data, frozen_policy(), M.Architecture(head="rescnf"))
     perturb(model, seed=4)
     model.eval()
     return model, {k: v[:4] for k, v in data.train.items()}
@@ -133,7 +133,7 @@ def test_a_source_leaves_the_terms_of_what_it_never_records_out_of_the_loss():
 
 def test_initial_outcome_rates_count_only_the_stays_that_record_the_outcome():
     data = prepared()
-    core = M.pulse_model(protocol())
+    core = M.pulse_model(protocol(), M.Architecture(head="rescnf"))
     j = V.BINARY.index("Cumulative Edema")
     binary = data.train["binary"].clone()
     binary[:3, :, j] = 0.0
@@ -245,14 +245,14 @@ def test_fit_continues_where_it_stopped(phase, call, tmp_path, monkeypatch):
     """Stopped within the first epoch (call 2), at the start of the second (3) or within the third (6)."""
     settings = T.Settings(epochs=4, batch=BATCH, micro=MICRO, patience=1, min_epochs=2)
     policy = None if phase == "policy" else frozen_policy()
-    whole = T.fit(phase, prepared(), policy, tmp_path / "whole", "cpu", settings)
+    whole = T.fit(phase, prepared(), policy, tmp_path / "whole", "cpu", settings, architecture=M.Architecture(head="rescnf"))
     with monkeypatch.context() as patch:
         interrupt_at(patch, call)
         with pytest.raises(Interrupted):
-            T.fit(phase, prepared(), policy, tmp_path / "parts", "cpu", settings)
+            T.fit(phase, prepared(), policy, tmp_path / "parts", "cpu", settings, architecture=M.Architecture(head="rescnf"))
     assert (tmp_path / "parts" / f"{phase}.continue.pt").exists()
     torch.manual_seed(1)  # the continuation restores the generators
-    parts = T.fit(phase, prepared(), policy, tmp_path / "parts", "cpu", settings)
+    parts = T.fit(phase, prepared(), policy, tmp_path / "parts", "cpu", settings, architecture=M.Architecture(head="rescnf"))
     assert parts["history"] == whole["history"]
     assert all(torch.equal(v, whole["model"].state_dict()[k]) for k, v in parts["model"].state_dict().items())
     assert not (tmp_path / "parts" / f"{phase}.continue.pt").exists()
@@ -266,3 +266,19 @@ def test_fit_refuses_the_continuation_of_another_fit(tmp_path, monkeypatch):
             T.fit("policy", prepared(), None, tmp_path, "cpu", settings)
     with pytest.raises(ValueError, match="continues another fit"):
         T.fit("policy", prepared(), None, tmp_path, "cpu", T.Settings(epochs=4, batch=BATCH, micro=MICRO))
+
+
+def test_spline_warm_start_from_direct_flow(tmp_path):
+    source = tmp_path / "flow.pt"
+    data = prepared()
+    flow = T.build("sample", data, frozen_policy(), M.Architecture(head="cnf"))
+    M.save_checkpoint(source, flow, [], data.protocol.cache_sha256, M.Architecture(head="cnf"))
+    settings = T.Settings(epochs=1, batch=7, micro=7, patience=1, min_epochs=1)
+    result = T.fit("sample", data, frozen_policy(), tmp_path / "fit", "cpu", settings,
+                   warm_start_cnf=source)
+    checkpoint = torch.load(tmp_path / "fit/sample.pt", weights_only=True)
+    assert result["model"].pulse.head == "bspline"
+    assert checkpoint["architecture"]["head"] == "bspline"
+    assert checkpoint["initialization"]["kind"] == "direct_cnf"
+    assert checkpoint["initialization"]["copied_heads"] > 0
+    assert len(checkpoint["initialization"]["sha256"]) == 64

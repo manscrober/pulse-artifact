@@ -6,7 +6,7 @@ from synthetic import part, perturb, protocol
 
 def build():
     torch.manual_seed(M.SEED)
-    pulse = M.pulse_model(protocol())
+    pulse = M.pulse_model(protocol(), M.Architecture(head="rescnf"))
     after_pulse = torch.rand(3)
     pulse.set_binary_biases(pulse.binary_initial_logits(part(seed=6, n=16)["binary"]))
     policy = M.build_policy(protocol())

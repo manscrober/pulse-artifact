@@ -1,1 +1,1 @@
-"""PULSE: probabilistic ICU trajectory simulation with distribution feedback."""
+"""PULSE: probabilistic ICU trajectory simulation with B-spline outputs."""

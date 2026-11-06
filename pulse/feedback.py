@@ -215,6 +215,8 @@ class FeedbackPULSE(nn.Module):
         present = q.new_zeros(shape)
         p = outputs["mu"].new_zeros(*shape[:2], len(V.BINARY))
         p_present = torch.zeros_like(p)
+        if self.pulse.head == "bspline":
+            raise ValueError("distribution feedback requires a continuous-flow head")
         params = outputs["dist_params_list"]
         stacked = {k: torch.stack([par[k] for par in params], 2) for k in cnf.FLOW_KEYS}
         indices = self.pulse.output_indices
